@@ -270,6 +270,10 @@ $('#nav').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}
 $('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Spending:spend,Entries:ents,Goals:goals}[tab]()}
 // One line for an occurrence, with a Paid / Received toggle
 const orow=(x,dt=true)=>`<div class="row ${x.p?'paid':''}"><button class="lk" data-occ="${x.e.id}:${x.k}" type="button">${dt?sd(x.d)+' · ':''}${esc(x.e.n)}${x.e.r!=='o'?' ↻':''}${!x.p&&x.d<today()&&x.d>=pd(S.set.asof)?'<span class="tag">overdue</span>':''}</button><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.a)}</b> <button class="btn ghost sm" data-tog="${x.e.id}:${x.k}" type="button">${x.p?'Undo':x.e.t==='i'?'Received':'Paid'}</button></span></div>`;
+// Dashboard summary of debts: what is owed, this payday's extra payment, and the estimated debt-free date
+function debtCard(W,t){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5);if(!ds.length)return '';const w=W[0],t0=wkStart(t),mo=items(new Date(t.getFullYear(),t.getMonth(),1),new Date(t.getFullYear(),t.getMonth()+1,0)).filter(x=>x.e.t==='e'&&x.e.cat==='Debt'),paidM=mo.reduce((s,x)=>s+(+x.a),0);
+const owed=ds.reduce((s,g)=>s+ +g.o,0),orig=ds.reduce((s,g)=>s+Math.max(+g.t0||0,+g.o),0),p=orig?Math.min(100,(orig-owed)/orig*100):0;
+return `<div class="card" style="margin-top:10px"><h2>Debt</h2><div class="big exp">${fmt(owed)}</div><div class="lbl">owed across ${ds.length} debt${ds.length===1?'':'s'}</div><div class="bar"><i style="width:${p}%"></i></div>`+ds.map(g=>{const ex=Math.max(w.gd[g.id]||0,w.nd[g.id]||0),wk=payoffWeeks(g,ex);return `<div class="row"><span>${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}extra ${fmt(w.gd[g.id]||0)} this payday${wk?' · free ~'+sdy(addD(t0,wk*7)):''}</span></span><b class="exp">${fmt(g.o)}</b></div>`}).join('')+`<div class="small" style="margin-top:6px">Debt payments in your bills this month: ${fmt(paidM)} (entries with the category Debt).</div></div>`}
 function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY),sv=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
 const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
 let h='';
@@ -297,7 +301,7 @@ const al=[];W.forEach((x,i)=>{if(x.status==='short')al.push(`<div class="alert b
 if(i>0&&x.re>x.ri&&x.short<.5)al.push(`<div class="alert">Heavy week starting ${sd(x.a)}: bills are ${fmt(x.re-x.ri)} above pay.</div>`)});
 if(w.res>0)al.unshift(`<div class="alert">Set aside <b>${fmt(w.res)}</b> from this week’s pay toward upcoming heavy weeks.</div>`);
 const up=items(addD(t,-30),addD(t,14)).filter(x=>x.d>=as&&(x.d>=t||!x.p));
-h+=`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Coming up</h2>`+(up.map(x=>orow(x)).join('')||'<div class="small">Nothing due in the next 14 days.</div>')+`</div>`;
+h+=debtCard(W,t)+`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Coming up</h2>`+(up.map(x=>orow(x)).join('')||'<div class="small">Nothing due in the next 14 days.</div>')+`</div>`;
 return h}
 function cal(){const first=new Date(cm),last=new Date(cm.getFullYear(),cm.getMonth()+1,0),s=addD(first,-first.getDay()),end=addD(last,6-last.getDay()),tk=ymd(today()),as=pd(S.set.asof),bal={};
 if((end-as)/DAY<1500){let b=+S.set.bal;const dl={};items(as,end).forEach(x=>{if(x.p)return;const k=ymd(x.d);dl[k]=(dl[k]||0)+(x.e.t==='i'?1:-1)*x.a});for(let d=new Date(as);d<=end;d=addD(d,1)){const k=ymd(d);b+=dl[k]||0;bal[k]=b}}
