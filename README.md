@@ -11,14 +11,14 @@ This is a plain static site. There is no server and no build step, so it runs on
 | `index.html` | The whole app |
 | `manifest.webmanifest` | Lets phones install it with its own name and icon |
 | `sw.js` | Lets the app open offline after the first visit |
-| `icons/` | App icons for Android, iPhone and browser tabs |
+| `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App icons for Android, iPhone and browser tabs |
 
 ## 1. Put it on GitHub
 
 1. Unzip the download.
 2. On github.com choose **New repository**. Name it `payday-planner`, choose **Public**, and create it. (Free accounts can only use GitHub Pages with public repositories.)
 3. On the empty repository page choose **uploading an existing file**.
-4. Drag in everything from inside the unzipped folder, including the `icons` folder, then choose **Commit changes**.
+4. Drag in everything from inside the unzipped folder, then choose **Commit changes**.
 
 If you prefer the command line, run this inside the unzipped folder:
 
