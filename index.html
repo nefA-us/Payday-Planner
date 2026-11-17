@@ -84,6 +84,13 @@ label{display:block;font-size:13px;color:var(--mut);margin-top:8px}
 input,select{width:100%;padding:7px 8px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);margin-top:2px}
 .acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
 .small{font-size:12px;color:var(--mut)}
+/* Pop-ups (entry, goal, settings): fit small screens, scroll when tall, and avoid the iPhone zoom on focus */
+dialog{max-width:calc(100vw - 24px);max-height:calc(100% - 24px);overflow-y:auto;overscroll-behavior:contain}
+dialog input,dialog select{font-size:16px;min-height:40px;color:var(--ink)}
+dialog input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;text-align:left}
+dialog .btn{min-height:40px}
+dialog .acts{flex-wrap:wrap}
+@media (max-width:560px){dialog{width:min(440px,calc(100vw - 24px));margin:max(12px,env(safe-area-inset-top,0px)) auto auto;max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px))}}
 /* Standalone page: keep content clear of phone status bars and home indicators */
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 [hidden]{display:none!important}
