@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Payday Planner</title>
+<meta name="theme-color" content="#14231e">
+<meta name="description" content="Plan each paycheck, upcoming bills and savings goals on a calendar.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Payday">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: one column. Header with account + save status, notes, tab bar, then the active view. */
+:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--res:#a8700f;--acc:#14231e;--accf:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Instrument Sans",system-ui,-apple-system,Segoe UI,sans-serif;font-variant-numeric:tabular-nums}
+main{max-width:1000px;margin:0 auto;padding-block:12px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+h1{font-size:20px;margin:0;letter-spacing:-.01em}
+h2{font-size:16px;margin:0 0 8px}
+nav{display:flex;gap:4px;overflow-x:auto;margin-bottom:14px;border-bottom:1px solid var(--ln)}
+nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);font:inherit;font-weight:600;padding:8px 12px;cursor:pointer;white-space:nowrap}
+nav button.on{color:var(--ink);border-color:var(--ink)}
+button,input,select{font:inherit;color:inherit}
+.btn{background:var(--acc);color:var(--accf);border:0;border-radius:6px;padding:7px 12px;font-weight:600;cursor:pointer}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--ln)}
+.btn.del{background:none;color:var(--exp);border:1px solid var(--exp)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
+.hr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.acct{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mut);min-width:0}
+.acct img{width:22px;height:22px;border-radius:50%}
+.pill{border:1px solid var(--ln);background:var(--sf);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--mut);cursor:default}
+.pill.ok{color:var(--inc)}.pill.warn{color:var(--res)}.pill.bad{color:var(--exp);cursor:pointer}
+.note{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--ln);border-left:4px solid var(--goal);background:var(--sf);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px}
+.note .acts{margin:0}
+.center{max-width:460px;margin:40px auto;text-align:center}
+.zone{margin-top:16px;padding-top:10px;border-top:1px solid var(--ln)}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:8px;padding:12px 14px}
+.big{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lbl{color:var(--mut);font-size:13px}
+.inc{color:var(--inc)}.exp{color:var(--exp)}.goal{color:var(--goal)}.res{color:var(--res)}
+.hero{border-left:5px solid var(--inc);margin-bottom:10px}
+.hero.short{border-color:var(--exp)}
+.row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--ln)}
+.row:last-child{border:0}
+.bar{height:8px;background:var(--ln);border-radius:4px;overflow:hidden;margin:6px 0 2px}
+.bar i{display:block;height:100%;background:var(--goal)}
+.alert{border-left:4px solid var(--res);background:var(--sf);padding:8px 12px;margin-bottom:8px;border-radius:0 6px 6px 0}
+.alert.bad{border-color:var(--exp)}
+.cal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cal-head h2{margin:0;flex:1}
+.chip{display:block;width:100%;text-align:left;border:0;border-radius:3px;margin-top:2px;padding:1px 3px;font-size:11px;line-height:1.3;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:color-mix(in srgb,currentColor 14%,transparent)}
+.scroll{overflow-x:auto}
+.mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(170px,1.4fr);min-width:860px;border:1px solid var(--ln);border-radius:8px;overflow:hidden;background:var(--sf)}
+.mh{padding:6px 4px;text-align:center;font-size:12px;font-weight:600;color:var(--mut);border-bottom:1px solid var(--ln);background:var(--bg)}
+.mc{min-height:104px;padding:4px;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ps{padding:6px 8px;font-size:12px;background:var(--bg);border-bottom:1px solid var(--ln);min-width:0}
+.ps .row{padding:2px 0;gap:6px}
+.psh{font-weight:600;margin-bottom:3px}
+.mc.out{background:var(--bg)}.mc.out .nm{color:var(--mut);opacity:.6}
+.mc:hover{background:color-mix(in srgb,var(--goal) 7%,var(--sf))}
+.nm{font-size:12px;font-weight:600;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%}
+.mc.today .nm{background:var(--goal);color:var(--sf)}
+.mc .chip{font-size:11px;padding:2px 4px}
+.more{font-size:11px;color:var(--mut);font-weight:600}
+.db{margin-top:auto;font-size:10px;color:var(--mut);text-align:right}
+.db.neg{color:var(--exp);font-weight:600}
+.tot{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 8px;font-size:13px}
+@media (max-width:560px){.mc{min-height:64px;padding:2px}.mc .chip{font-size:9px;padding:1px 2px}.db{display:none}.big{font-size:22px}}
+table{border-collapse:collapse;width:100%;min-width:640px;background:var(--sf)}
+th,td{padding:7px 8px;border-bottom:1px solid var(--ln);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-size:13px;color:var(--mut);font-weight:600}
+dialog{border:1px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--ink);padding:16px;width:min(380px,92vw)}
+dialog::backdrop{background:#0008}
+label{display:block;font-size:13px;color:var(--mut);margin-top:8px}
+input,select{width:100%;padding:7px 8px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);margin-top:2px}
+.acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.small{font-size:12px;color:var(--mut)}
+/* Standalone page: keep content clear of phone status bars and home indicators */
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Payday Planner</h1><div class="hr"><span class="acct" id="acct"></span><button class="pill" id="stat" type="button">Connecting…</button><button class="btn ghost" id="bSet" type="button">Settings</button></div></header>
+<div id="notes"></div>
+<nav id="nav"></nav>
+<div id="view"></div>
+</main>
+<dialog id="dlg"></dialog>
+<input type="file" id="fileIn" accept="application/json,.json" hidden>
+<script>
+const DAY=864e5,TABS=['Dashboard','Calendar','Month ahead','Entries','Goals'];
+let S=null,tab='Dashboard',cm=new Date();cm.setDate(1);
+// Account and storage state
+let mode='local',state='loading',status='loading',ref=null,account=null,readonly=false,dirty=false,saving=false,first=false,slow=false,notice='',errMsg='',wipeArmed=false,qt=0,slowT=0,retried=false;
+const $=s=>document.querySelector(s);
+const pd=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
+const fmt=n=>(n<-.5?'-':'')+'$'+Math.abs(Math.round(n)).toLocaleString();
+const today=()=>{const t=new Date();t.setHours(0,0,0,0);return t};
+const sd=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+const sdy=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function seed(){const t=today(),f=addD(t,-((t.getDay()+2)%7)),m=d=>ymd(new Date(t.getFullYear(),t.getMonth(),d));
+return{set:{payday:5,bal:600,asof:ymd(t),buf:100},nid:20,
+e:[{id:1,n:'Paycheck',a:900,t:'i',d:ymd(f),r:'w'},{id:2,n:'Rent',a:1000,t:'e',d:m(1),r:'m'},{id:3,n:'Utilities',a:150,t:'e',d:m(5),r:'m'},{id:4,n:'Phone',a:80,t:'e',d:m(12),r:'m'},{id:5,n:'Subscriptions',a:35,t:'e',d:m(15),r:'m'},{id:6,n:'Car payment',a:350,t:'e',d:m(28),r:'m'},{id:7,n:'Insurance',a:140,t:'e',d:m(30),r:'m'},{id:8,n:'Groceries',a:110,t:'e',d:ymd(addD(f,1)),r:'w'}],
+g:[{id:1,n:'Emergency fund',t:2000,s:300,d:'',p:3},{id:2,n:'Vacation',t:800,s:0,d:ymd(addD(t,120)),p:2}],acc:{},demo:true}}
+const blank=()=>({set:{payday:5,bal:0,asof:ymd(today()),buf:0},nid:1,e:[],g:[],acc:{},demo:false});
+const norm=o=>({set:Object.assign({payday:5,bal:0,asof:ymd(today()),buf:0},o.set||{}),nid:+o.nid||100,e:Array.isArray(o.e)?o.e:[],g:Array.isArray(o.g)?o.g:[],acc:o.acc&&typeof o.acc==='object'?o.acc:{},demo:!!o.demo});
+const clean=()=>JSON.parse(JSON.stringify(S));
+// Local (signed-out) storage
+function localLoad(){try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e))S=norm(o)}catch(e){}if(!S)S=seed()}
+function localSave(){try{localStorage.setItem('payday1',JSON.stringify(S))}catch(e){}}
+// Saving: cloud documents are written one at a time, after a short pause
+function save(){if(mode==='cloud'){if(readonly)return;dirty=true;queue()}else localSave()}
+function queue(){clearTimeout(qt);qt=setTimeout(flush,300);paint('saving')}
+async function flush(){if(!ref||saving||!dirty||state!=='ready')return;saving=true;dirty=false;paint('saving');let err=null;
+try{await ref.set(clean())}catch(e){err=e||{}}
+saving=false;
+if(!err){retried=false;if(dirty)queue();else paint('saved');return}
+if(err.code==='invalid_argument'){readonly=true;paint('readonly');render();return}
+dirty=true;paint('error');
+if(err.code==='unavailable'&&!retried){retried=true;setTimeout(flush,1500)}}
+const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…','']};
+function paint(s){if(s)status=s;const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
+$('#acct').innerHTML=account&&mode==='cloud'?`<img src="${esc(account.avatarUrl)}" alt=""><span>${esc(account.name||'You')}</span>`:''}
+// First visit for this account: move the old browser copy if there is one, otherwise start with samples
+async function firstRun(){first=true;let init=null,moved=false;
+try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)){init=norm(o);moved=true}}catch(e){}
+if(!init)init=seed();
+S=init;
+try{await ref.set(clean());state='ready';clearTimeout(slowT);
+if(moved){try{localStorage.removeItem('payday1')}catch(e){}notice='Your planner was moved from this browser to your account. The copy in this browser has been removed.'}
+paint('saved')}
+catch(err){state='ready';clearTimeout(slowT);if(err&&err.code==='invalid_argument'){readonly=true;paint('readonly')}else{dirty=true;paint('error')}}
+first=false;render()}
+function onSnap(snap){if(mode!=='cloud'||state==='deleted'||first)return;
+if(snap.exists){const d=norm(snap.data());
+if(state!=='ready'){S=d;state='ready';clearTimeout(slowT);paint(readonly?'readonly':'saved');render();return}
+if(snap.metadata.hasPendingWrites||dirty||saving)return;
+if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}
+else if(state==='loading'&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites)firstRun()}
+function onSnapErr(e){clearTimeout(slowT);if(state==='loading'){state='error';errMsg=e&&e.code==='revoked'?'Your access to this page changed. Ask the person who shared it to share it with you again.':'Your saved data could not be reached'+(e&&e.code?' ('+e.code+')':'')+'. Close this page and open it again to retry.';render()}else paint('error')}
+async function boot(){paint('loading');render();
+let db=null,user=null,me=null;
+try{if(window.claude&&window.claude.use){const r=await Promise.all([claude.use('db'),claude.use('user')]);db=r[0];user=r[1]}}catch(e){}
+if(user){try{me=await user.me()}catch(e){}}
+if(db&&me&&me.id){mode='cloud';account=me;
+try{ref=db.doc('data/users/'+me.id+'/planner');slowT=setTimeout(()=>{if(state==='loading'){slow=true;render()}},10000);ref.onSnapshot(onSnap,onSnapErr)}
+catch(e){onSnapErr(e)}}
+else{mode='local';localLoad();state='ready';paint('local');render()}}
+const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
+function occ(e,a,b){const o=[],s=pd(e.d);
+if(e.r==='o'){if(s>=a&&s<=b)o.push(s)}
+else if(e.r==='w'||e.r==='b'){const st=e.r==='w'?7:14;let d=new Date(s);if(d<a)d=addD(d,Math.ceil(Math.round((a-d)/DAY)/st)*st);for(;d<=b;d=addD(d,st))o.push(d)}
+else{let c=new Date(a.getFullYear(),a.getMonth(),1);while(c<=b){const last=new Date(c.getFullYear(),c.getMonth()+1,0).getDate(),d=new Date(c.getFullYear(),c.getMonth(),Math.min(s.getDate(),last));if(d>=s&&d>=a&&d<=b)o.push(d);c=new Date(c.getFullYear(),c.getMonth()+1,1)}}
+return o}
+const items=(a,b)=>S.e.flatMap(e=>occ(e,a,b).map(d=>({e,d}))).sort((x,y)=>x.d-y.d||x.e.t.localeCompare(y.e.t));
+function dist(amt,G){const out={};G.forEach(g=>out[g.id]=0);
+// Goals are funded last, from what is left after bills, reserves and the buffer.
+// A dated goal takes only its even share toward the target (highest priority first).
+[...G].sort((a,b)=>b.p-a.p).forEach(g=>{if(g.dated){const x=Math.max(0,Math.min(g.need,g.rem,amt));out[g.id]+=x;g.rem-=x;amt-=x}});
+// Goals without a date share whatever is left, by priority.
+for(let i=0;i<6&&amt>.5;i++){const o=G.filter(g=>!g.dated&&g.rem>.5);if(!o.length)break;const tw=o.reduce((s,g)=>s+g.p,0),base=amt;o.forEach(g=>{const x=Math.min(g.rem,base*g.p/tw);out[g.id]+=x;g.rem-=x;amt-=x})}
+return out}
+// Forecast: budget weeks start on payday; each paycheck funds that week's bills.
+function forecast(N){const as=pd(S.set.asof),w0=wkStart(today()),bal=+S.set.bal,buf=+S.set.buf,W=[];
+for(let i=0;i<N;i++){const a=addD(w0,i*7),b=addD(a,6);let inc=0,exp=0;
+items(a,b).forEach(x=>{if(x.d<as)return;x.e.t==='i'?inc+=+x.e.a:exp+=+x.e.a});
+W.push({i,a,b,inc,exp,net:inc-exp,res:0,R:{},goal:0,gd:{}})}
+W.forEach(w=>w.cap=Math.max(0,w.net));W[0].cap+=Math.max(0,bal-buf);
+for(let j=1;j<N;j++){let s=Math.max(0,W[j].exp-W[j].inc),pool=[...Array(j).keys()].filter(i=>W[i].cap>.5);
+for(let it=0;it<8&&s>.5&&pool.length;it++){const sh=s/pool.length;pool.forEach(i=>{const x=Math.min(sh,W[i].cap);W[i].cap-=x;W[i].res+=x;W[i].R[j]=(W[i].R[j]||0)+x;s-=x});pool=pool.filter(i=>W[i].cap>.5)}
+W[j].short=s}
+const G=S.g.map(g=>({id:g.id,rem:Math.max(0,g.t-g.s),dated:!!g.d,d:g.d,p:g.p,need:0}));
+let start=bal,saved=S.g.reduce((s,g)=>s+ +g.s,0);
+W.forEach((w,i)=>{w.start=start;w.end=start+w.net;start=w.end;
+w.held=0;for(let k=0;k<=i;k++)for(const j in W[k].R)if(+j>i)w.held+=W[k].R[j];
+w.avail=w.end-w.held-saved-buf;
+w.nd={};w.left={};
+G.forEach(g=>{if(g.dated){const n=Math.max(1,Math.ceil(Math.round((pd(g.d)-w.a)/DAY)/7));g.need=g.rem/n;w.nd[g.id]=g.need;w.left[g.id]=n}});
+const cap=Math.max(0,w.avail);w.gd=dist(cap,G);w.goal=Object.values(w.gd).reduce((s,x)=>s+x,0);saved+=w.goal;
+w.status=w.end<0?'short':w.inc>=w.exp?'ok':'reserve'});
+return W}
+function notes(){let h='';
+if(mode==='local')h+=`<div class="note"><span>Your planner is saved only in this browser on this device. Use Settings to export a backup or move it to another device.</span></div>`;
+if(readonly)h+=`<div class="note"><span>You have view-only access, so changes are not saved. Ask the person who shared this page for Contributor access.</span></div>`;
+if(notice)h+=`<div class="note"><span>${esc(notice)}</span><span class="acts"><button class="btn ghost" data-dismiss type="button">Dismiss</button></span></div>`;
+if(state==='ready'&&S&&S.demo)h+=`<div class="note"><span>These are sample entries so you can see how the planner works. Replace them with your own.</span><span class="acts"><button class="btn ghost" data-keep type="button">Keep</button><button class="btn" data-clear type="button">Clear samples</button></span></div>`;
+return h}
+function gate(){
+if(state==='loading')return `<div class="card center"><h2>Opening your planner</h2><div class="lbl">${slow?'Still trying to reach your saved data. Your planner opens as soon as it connects.':'Loading your private planner.'}</div></div>`;
+if(state==='error')return `<div class="card center"><h2>Your planner could not open</h2><div class="lbl">${esc(errMsg)}</div></div>`;
+if(state==='deleted')return `<div class="card center"><h2>Your data was deleted</h2><div class="lbl">Nothing is stored for you any more.</div><div class="acts" style="justify-content:center"><button class="btn" data-new type="button">Start a new planner</button></div></div>`;
+return null}
+function render(){paint();$('#notes').innerHTML=notes();
+const g=(state!=='ready'||!S)?gate():null;
+if(g){$('#nav').innerHTML='';$('#view').innerHTML=g;return}
+$('#nav').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
+$('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Entries:ents,Goals:goals}[tab]()}
+function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof);
+const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
+let h='';
+if(!S.e.length)h+=`<div class="card hero"><div class="big">Start with your paycheck</div><div class="lbl">Add the income and bills you expect. The planner then shows what each paycheck covers.</div><div class="acts" style="justify-content:flex-start"><button class="btn" data-add="${ymd(t)}" type="button">Add entry</button></div></div>`;
+h+=`<div class="card hero ${ok?'':'short'}"><div class="lbl">This budget week (${sd(w.a)} – ${sd(w.b)})</div><div class="big">${w.status==='short'?'Shortfall: '+fmt(w.end):msg}</div><div class="lbl">Next payday in ${days} day${days===1?'':'s'} (${sd(nxt)})</div></div>`;
+h+=`<div class="grid"><div class="card"><div class="lbl">Balance now</div><div class="big">${fmt(S.set.bal)}</div></div>
+<div class="card"><div class="lbl">Bills due this week</div><div class="big exp">${fmt(w.exp)}</div></div>
+<div class="card"><div class="lbl">Hold for heavy weeks</div><div class="big res">${fmt(w.held)}</div></div>
+<div class="card"><div class="lbl">Set aside for goals</div><div class="big goal">${fmt(w.goal)}</div></div>
+<div class="card"><div class="lbl">Safe to spend</div><div class="big inc">${fmt(Math.max(0,w.avail-w.goal))}</div></div>
+<div class="card"><div class="lbl">Projected end of week</div><div class="big">${fmt(w.end)}</div></div></div>`;
+h+=`<div class="grid" style="margin-top:10px"><div class="card"><h2>Payday plan</h2>
+<div class="row"><span>Balance on hand</span><b>${fmt(S.set.bal)}</b></div>
+<div class="row"><span>+ Income this week</span><b class="inc">${fmt(w.inc)}</b></div>
+<div class="row"><span>− Bills this week</span><b class="exp">${fmt(w.exp)}</b></div>
+<div class="row"><span>− Held for heavy weeks</span><b class="res">${fmt(w.held)}</b></div>
+<div class="row"><span>− Already saved to goals</span><b class="goal">${fmt(S.g.reduce((s,g)=>s+ +g.s,0))}</b></div>
+<div class="row"><span>− Safety buffer</span><b>${fmt(S.set.buf)}</b></div>
+<div class="row"><span><b>Free to use</b></span><b>${fmt(Math.max(0,w.avail))}</b></div></div>`;
+const acc=S.acc[ymd(w.a)];
+h+=`<div class="card"><h2>Goal recommendation</h2>`+(S.g.length?S.g.map(g=>`<div class="row"><span>${esc(g.n)}${w.nd[g.id]?` <span class="small">needs ${fmt(w.nd[g.id])} per payday</span>`:''}</span><b class="goal">${fmt(w.gd[g.id]||0)}</b></div>`).join(''):'<div class="small">Add a goal to get a recommendation.</div>')+
+(acc?'<div class="small">Accepted for this week.</div>':w.goal>0?'<div class="acts"><button class="btn" id="bAcc" type="button">Accept</button></div>':'')+`</div></div>`;
+const al=[];W.forEach((x,i)=>{if(x.status==='short')al.push(`<div class="alert bad">Week of ${sd(x.a)} ends ${fmt(x.end)}. Cut spending or move a bill before then.</div>`);
+if(i>0&&x.exp>x.inc&&x.short<.5)al.push(`<div class="alert">Heavy week starting ${sd(x.a)}: bills are ${fmt(x.exp-x.inc)} above pay.</div>`)});
+if(w.res>0)al.unshift(`<div class="alert">Set aside <b>${fmt(w.res)}</b> from this week’s pay toward upcoming heavy weeks.</div>`);
+h+=`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Upcoming bills (14 days)</h2>`+(items(t,addD(t,14)).filter(x=>x.e.t==='e'&&x.d>=as).map(x=>`<div class="row"><span>${sd(x.d)} · ${esc(x.e.n)}</span><b class="exp">${fmt(x.e.a)}</b></div>`).join('')||'<div class="small">No bills due in the next 14 days.</div>')+`</div>`;
+return h}
+function cal(){const first=new Date(cm),last=new Date(cm.getFullYear(),cm.getMonth()+1,0),s=addD(first,-first.getDay()),end=addD(last,6-last.getDay()),tk=ymd(today()),as=pd(S.set.asof),bal={};
+if((end-as)/DAY<1500){let b=+S.set.bal;const dl={};items(as,end).forEach(x=>{const k=ymd(x.d);dl[k]=(dl[k]||0)+(x.e.t==='i'?1:-1)*x.e.a});for(let d=new Date(as);d<=end;d=addD(d,1)){const k=ymd(d);b+=dl[k]||0;bal[k]=b}}
+const pdl=addD(addD(end,-6),+S.set.payday),w0=wkStart(today()),W=forecast(Math.max(1,Math.min(60,Math.round((pdl-w0)/DAY/7)+1)));
+const all=items(s,end);let ti=0,te=0;all.forEach(x=>{if(x.d>=first&&x.d<=last)x.e.t==='i'?ti+=+x.e.a:te+=+x.e.a});
+let h=`<div class="cal-head"><button class="btn ghost" data-m="-1" aria-label="Previous month" type="button">‹</button><button class="btn ghost" data-m="0" type="button">Today</button><button class="btn ghost" data-m="1" aria-label="Next month" type="button">›</button><h2>${cm.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><button class="btn" data-add="${tk}" type="button">Add entry</button></div><div class="tot"><span class="inc">Income ${fmt(ti)}</span><span class="exp">Expenses ${fmt(te)}</span><span>Net ${fmt(ti-te)}</span></div><div class="scroll"><div class="mg">`;
+for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined,{weekday:'short'})}</div>`;
+h+='<div class="mh">Pay plan</div>';for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k),bv=bal[k];
+h+=`<div class="mc ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-add="${k}"><div class="nm">${d.getDate()}</div>`+its.slice(0,3).map(x=>`<button class="chip ${x.e.t==='i'?'inc':'exp'}" data-edit="${x.e.id}" title="${esc(x.e.n)}" type="button">${esc(x.e.n)} ${fmt(x.e.a)}</button>`).join('')+(its.length>3?`<button class="more chip" data-day="${k}" type="button">+${its.length-3} more</button>`:'')+(bv!==undefined?`<div class="db ${bv<0?'neg':''}">${fmt(bv)}</div>`:'')+`</div>`;if(d.getDay()===6)h+=psum(addD(d,-6),W)}
+return h+'</div></div><div class="small" style="margin-top:6px">Click a day to add an entry, or an entry to edit or delete it. The small number at the bottom of each day is your projected balance. The Pay plan column on the right of each week shows how the paycheck landing that week is split: bills until the next payday, money held for heavy weeks, and goals.</div>'}
+function psum(rs,W){const p=addD(rs,+S.set.payday),w=W.find(x=>ymd(x.a)===ymd(p));
+if(!w)return `<div class="ps"><div class="small">Pay week of ${sd(p)} has passed</div></div>`;
+const gl=S.g.filter(g=>(w.gd[g.id]||0)>.5).map(g=>`<div class="row"><span>${esc(g.n)} goal</span><b class="goal">${fmt(w.gd[g.id])}</b></div>`).join('')||'<div class="row"><span>Goals</span><b class="goal">$0</b></div>';
+return `<div class="ps"><div class="psh">Paid ${sd(w.a)}, covers to ${sd(w.b)}</div><div class="row"><span>Paycheck</span><b class="inc">${fmt(w.inc)}</b></div><div class="row"><span>Upcoming expenses</span><b class="exp">${fmt(w.exp)}</b></div><div class="row"><span>Set aside for heavy weeks</span><b class="res">${fmt(w.res)}</b></div>${gl}<div class="row"><span>Left to spend</span><b>${fmt(Math.max(0,w.avail-w.goal))}</b></div>`+(w.status==='short'?`<div class="exp"><b>⚠ Short ${fmt(-w.end)}</b></div>`:'')+`</div>`}
+function dayDlg(k){const its=items(pd(k),pd(k));dlg(`<h2>${pd(k).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</h2>`+(its.length?its.map(x=>`<div class="row"><span>${esc(x.e.n)}</span><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.e.a)}</b> <button class="btn ghost" data-edit="${x.e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">Nothing scheduled.</div>')+`<div class="acts"><button class="btn ghost" data-x type="button">Close</button><button class="btn" data-add="${k}" type="button">Add entry</button></div>`)}
+function plan(){const W=forecast(10);
+let h=`<h2>Month ahead plan</h2><div class="small" style="margin-bottom:8px">Reserve is money to hold back now for a heavy week later. Goals come only from what is left after reserves and your buffer.</div><div class="scroll"><table><tr><th>Week</th><th>Pay</th><th>Bills</th><th>Reserve</th><th>Goals</th><th>Bank end</th><th>Status</th></tr>`;
+W.forEach(w=>{h+=`<tr><td>${sd(w.a)} – ${sd(w.b)}</td><td class="inc">${fmt(w.inc)}</td><td class="exp">${fmt(w.exp)}</td><td class="res">${fmt(w.res)}</td><td class="goal">${fmt(w.goal)}</td><td>${fmt(w.end)}</td><td>${w.status==='short'?'<b class="exp">Short</b>':w.exp>w.inc?'<span class="res">Heavy</span>':'Light'}</td></tr>`});
+h+='</table></div>';
+const xs=W.map(w=>w.end),mn=Math.min(0,...xs),mx=Math.max(1,...xs),X=i=>30+i*(640/(W.length-1)),Y=v=>170-(v-mn)/(mx-mn)*150;
+h+=`<div class="card" style="margin-top:12px"><h2>Projected bank balance</h2><svg viewBox="0 0 700 200" width="100%" role="img" aria-label="Projected balance by week"><line x1="30" x2="670" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ln)"/><polyline fill="none" stroke="var(--goal)" stroke-width="2.5" points="${xs.map((v,i)=>X(i)+','+Y(v)).join(' ')}"/>${xs.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="${v<0?'var(--exp)':'var(--goal)'}"/><text x="${X(i)}" y="${Y(v)-9}" font-size="11" text-anchor="middle" fill="var(--mut)">${fmt(v)}</text><text x="${X(i)}" y="195" font-size="10" text-anchor="middle" fill="var(--mut)">${sd(W[i].a)}</text>`).join('')}</svg></div>`;
+return h}
+const RN={o:'One time',w:'Weekly',b:'Every 2 weeks',m:'Monthly'};
+function ents(){return `<div class="cal-head"><h2>Income and expenses</h2><button class="btn" data-add="${ymd(today())}" type="button">Add entry</button></div><div class="card">`+(S.e.length?S.e.map(e=>`<div class="row"><span>${esc(e.n)} <span class="small">${RN[e.r]} from ${sd(pd(e.d))}</span></span><span><b class="${e.t==='i'?'inc':'exp'}">${e.t==='i'?'+':'−'}${fmt(e.a)}</b> <button class="btn ghost" data-edit="${e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">No entries yet. Use Add entry to enter a paycheck or a bill.</div>')+'</div>'}
+function goals(){const W=forecast(10),w=W[0];
+let h=`<div class="cal-head"><h2>Goals</h2><button class="btn" data-goal="0" type="button">Add goal</button></div><div class="small" style="margin-bottom:8px">Goals are funded last, from money left after bills, heavy-week reserves and your safety buffer. For a goal with a date, the planner works backwards from the target and asks for an even amount each payday until then. If a payday falls short, the amount needed on later paydays rises to catch up.</div><div class="grid">`;
+h+=S.g.length?S.g.map(g=>{const p=Math.min(100,g.s/g.t*100),rem=Math.max(0,g.t-g.s),plan=w.gd[g.id]||0,nd=w.nd[g.id]||0,n=w.left[g.id]||1;let info;
+if(rem<=.5)info='<div class="inc"><b>Goal reached</b></div>';
+else if(g.d){const late=pd(g.d)<w.a;info=`<div class="row"><span>Needed each payday</span><b class="goal">${fmt(nd)}</b></div><div class="small">${late?'The target date has passed, so the full amount is needed now.':n+' payday'+(n===1?'':'s')+' until '+sdy(pd(g.d))}</div><div class="row"><span>Planned this payday</span><b>${fmt(plan)}</b></div><div>${nd-plan>.5?`<span class="exp">Behind: this payday covers ${fmt(plan)} of ${fmt(nd)}</span>`:'<span class="inc">On pace</span>'}</div>`}
+else info=`<div class="row"><span>Planned this payday</span><b>${fmt(plan)}</b></div><div class="small">No target date. It gets what is left after bills, reserves and your buffer.</div>`;
+return `<div class="card"><b>${esc(g.n)}</b><div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(g.s)} of ${fmt(g.t)}${g.d?' by '+sdy(pd(g.d)):''} · priority ${['','low','low','medium','high','high'][g.p]||g.p}</div>${info}<div class="acts"><button class="btn ghost" data-goal="${g.id}" type="button">Edit</button></div></div>`}).join(''):'<div class="card"><div class="small">No goals yet. Add one with a target date and the planner works backwards to show what to set aside each payday.</div></div>';
+h+='</div>';
+if(S.g.length){h+=`<h2 style="margin-top:14px">Payday-by-payday plan</h2><div class="scroll"><table><tr><th>Payday week</th>${S.g.map(g=>`<th>${esc(g.n)}${w.nd[g.id]?`<br><span class="small">needs ${fmt(w.nd[g.id])}</span>`:''}</th>`).join('')}<th>Total</th></tr>`;
+W.forEach(x=>{h+=`<tr><td>${sd(x.a)} – ${sd(x.b)}</td>${S.g.map(g=>`<td class="goal">${fmt(x.gd[g.id]||0)}</td>`).join('')}<td><b>${fmt(x.goal)}</b></td></tr>`});
+h+='</table></div><div class="small" style="margin-top:6px">Each row is what to set aside from that payday. Weeks with heavy bills are funded first, so goals can get $0 there.</div>'}
+return h}
+function dlg(html){const d=$('#dlg');d.innerHTML=html;d.showModal()}
+const fld=(l,id,v,t='text',x='')=>`<label>${l}<input id="${id}" type="${t}" value="${esc(v)}" ${x}></label>`;
+function entryDlg(id,date){const e=S.e.find(x=>x.id==id)||{n:'',a:'',t:'e',d:date,r:'o'};
+dlg(`<h2>${id?'Edit':'Add'} entry</h2>${fld('Name','fn',e.n)}${fld('Amount','fa',e.a,'number','min="0" step="0.01"')}<label>Type<select id="ft"><option value="e" ${e.t==='e'?'selected':''}>Expense</option><option value="i" ${e.t==='i'?'selected':''}>Income</option></select></label>${fld('Due date','fd',e.d,'date')}<label>Repeats<select id="fr">${Object.entries(RN).map(([k,v])=>`<option value="${k}" ${e.r===k?'selected':''}>${v}</option>`).join('')}</select></label>${id?'<div class="small">Edits apply to every occurrence of a repeating entry.</div>':''}
+<div class="acts">${id?`<button class="btn del" data-del="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-save="${id||0}" type="button">Save</button></div>`)}
+function goalDlg(id){const g=S.g.find(x=>x.id==id)||{n:'',t:'',s:0,d:'',p:3};
+dlg(`<h2>${id?'Edit':'Add'} goal</h2>${fld('Name','gn',g.n)}${fld('Target amount','gt',g.t,'number','min="1"')}${fld('Saved so far','gs',g.s,'number','min="0"')}${fld('Target date (optional)','gd',g.d,'date')}<div class="small">With a date, the planner spreads the remaining amount evenly across your paydays until then.</div><label>Priority<select id="gp"><option value="5" ${g.p==5?'selected':''}>High</option><option value="3" ${g.p==3?'selected':''}>Medium</option><option value="1" ${g.p==1?'selected':''}>Low</option></select></label>
+<div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
+function setDlg(){const s=S.set;wipeArmed=false;
+dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
+<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
+async function doWipe(){clearTimeout(qt);
+if(mode==='cloud'&&ref){dirty=false;
+try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
+state='deleted'}
+else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
+$('#dlg').close();render()}
+const v=id=>$('#'+id).value;
+document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-wipe],[data-new],[data-export],[data-import]');
+if(t.id==='stat'){if(status==='error'){dirty=true;retried=false;flush()}return}
+if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
+if(t.id==='bAcc'){const w=forecast(1)[0];S.g.forEach(g=>g.s=+g.s+(w.gd[g.id]||0));S.acc[ymd(w.a)]=1;save();return render()}
+if(!c)return;const d=c.dataset;
+if('t'in d){tab=d.t;render()}else if('m'in d){cm=+d.m?new Date(cm.getFullYear(),cm.getMonth()+ +d.m,1):new Date(today().getFullYear(),today().getMonth(),1);render()}
+else if('edit'in d){e.stopPropagation();entryDlg(d.edit)}else if('day'in d){e.stopPropagation();dayDlg(d.day)}else if('add'in d)entryDlg(0,d.add)
+else if('x'in d)$('#dlg').close()
+else if('save'in d){if(!v('fn')||!(+v('fa')>0)||!v('fd'))return;const o={n:v('fn'),a:+v('fa'),t:v('ft'),d:v('fd'),r:v('fr')};
+if(+d.save)Object.assign(S.e.find(x=>x.id==d.save),o);else S.e.push({id:S.nid++,...o});save();$('#dlg').close();render()}
+else if('del'in d){S.e=S.e.filter(x=>x.id!=d.del);save();$('#dlg').close();render()}
+else if('goal'in d)goalDlg(+d.goal)
+else if('gsave'in d){if(!v('gn')||!(+v('gt')>0))return;const o={n:v('gn'),t:+v('gt'),s:+v('gs')||0,d:v('gd'),p:+v('gp')};
+if(+d.gsave)Object.assign(S.g.find(x=>x.id==d.gsave),o);else S.g.push({id:S.nid++,...o});save();$('#dlg').close();render()}
+else if('gdel'in d){S.g=S.g.filter(x=>x.id!=d.gdel);save();$('#dlg').close();render()}
+else if('sset'in d){S.set={payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0};save();$('#dlg').close();render()}
+else if('dismiss'in d){notice='';render()}
+else if('keep'in d){S.demo=false;save();render()}
+else if('clear'in d){S.e=[];S.g=[];S.acc={};S.set.bal=0;S.set.buf=0;S.demo=false;save();render()}
+else if('wipe'in d){if(!wipeArmed){wipeArmed=true;c.textContent='Click again to delete everything';return}doWipe()}
+else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
+else if('export'in d)exportData()
+else if('import'in d)$('#fileIn').click()});
+function exportData(){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-backup-'+ymd(today())+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The backup file could not be created.';$('#dlg').close();render()}}
+$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
+r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup imported.'}catch(x){notice='That file is not a Payday Planner backup.'}$('#dlg').close();render()};
+r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+boot();
+</script>
+</body>
+</html>
