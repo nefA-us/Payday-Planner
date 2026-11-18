@@ -267,18 +267,43 @@ function render(){paint();$('#notes').innerHTML=notes();
 const g=(state!=='ready'||!S)?gate():null;
 if(g){$('#nav').innerHTML='';$('#view').innerHTML=g;return}
 $('#nav').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
-$('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Spending:spend,Entries:ents,Goals:goals}[tab]()}
+$('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Spending:spend,Entries:ents,Goals:goals}[tab]();checkNotify()}
 // One line for an occurrence, with a Paid / Received toggle
 const orow=(x,dt=true)=>`<div class="row ${x.p?'paid':''}"><button class="lk" data-occ="${x.e.id}:${x.k}" type="button">${dt?sd(x.d)+' · ':''}${esc(x.e.n)}${x.e.r!=='o'?' ↻':''}${!x.p&&x.d<today()&&x.d>=pd(S.set.asof)?'<span class="tag">overdue</span>':''}</button><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.a)}</b> <button class="btn ghost sm" data-tog="${x.e.id}:${x.k}" type="button">${x.p?'Undo':x.e.t==='i'?'Received':'Paid'}</button></span></div>`;
 // Dashboard summary of debts: what is owed, this payday's extra payment, and the estimated debt-free date
 function debtCard(W,t){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5);if(!ds.length)return '';const w=W[0],t0=wkStart(t),mo=items(new Date(t.getFullYear(),t.getMonth(),1),new Date(t.getFullYear(),t.getMonth()+1,0)).filter(x=>x.e.t==='e'&&x.e.cat==='Debt'),paidM=mo.reduce((s,x)=>s+(+x.a),0);
 const owed=ds.reduce((s,g)=>s+ +g.o,0),orig=ds.reduce((s,g)=>s+Math.max(+g.t0||0,+g.o),0),p=orig?Math.min(100,(orig-owed)/orig*100):0;
 return `<div class="card" style="margin-top:10px"><h2>Debt</h2><div class="big exp">${fmt(owed)}</div><div class="lbl">owed across ${ds.length} debt${ds.length===1?'':'s'}</div><div class="bar"><i style="width:${p}%"></i></div>`+ds.map(g=>{const ex=Math.max(w.gd[g.id]||0,w.nd[g.id]||0),wk=payoffWeeks(g,ex);return `<div class="row"><span>${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}extra ${fmt(w.gd[g.id]||0)} this payday${wk?' · free ~'+sdy(addD(t0,wk*7)):''}</span></span><b class="exp">${fmt(g.o)}</b></div>`}).join('')+`<div class="small" style="margin-top:6px">Debt payments in your bills this month: ${fmt(paidM)} (entries with the category Debt).</div></div>`}
+// Reminders: this pay week's bills, and anything due tomorrow
+const NKEY='payday_sent';
+function reminders(){const t=today(),as=pd(S.set.asof),w0=wkStart(t),out=[],wk=items(w0,addD(w0,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);
+if(wk.length&&S.set.ack!==ymd(w0))out.push({key:'w'+ymd(w0),kind:'w',title:'New pay week: '+fmt(wk.reduce((s,x)=>s+ +x.a,0))+' in bills',body:wk.map(x=>sd(x.d)+' '+x.e.n+' '+fmt(x.a)).join(', ')});
+const tm=addD(t,1);items(tm,tm).filter(x=>x.e.t==='e'&&!x.p).forEach(x=>out.push({key:'d'+x.e.id+':'+x.k,kind:'d',title:x.e.n+' is due tomorrow',body:fmt(x.a)+' on '+sd(x.d)}));
+return out}
+// Device alerts: each reminder is sent once. They fire when the app is opened or comes back to the front.
+function checkNotify(){if(!window.Notification||window.claude||Notification.permission!=='granted'||!S||state!=='ready')return;let sent={};try{sent=JSON.parse(localStorage.getItem(NKEY))||{}}catch(e){}
+reminders().forEach(r=>{if(sent[r.key])return;sent[r.key]=Date.now();const o={body:r.body,tag:r.key,icon:'icon-192.png'};
+try{if(navigator.serviceWorker&&navigator.serviceWorker.ready)navigator.serviceWorker.ready.then(g=>g.showNotification(r.title,o)).catch(()=>{try{new Notification(r.title,o)}catch(e){}});else new Notification(r.title,o)}catch(e){}});
+Object.keys(sent).forEach(k=>{if(Date.now()-sent[k]>2592e6)delete sent[k]});try{localStorage.setItem(NKEY,JSON.stringify(sent))}catch(e){}}
+// Calendar file: next 60 days of bills with alerts the day before, plus a summary at the start of each pay week
+function downloadIcs(){const t=today(),end=addD(t,60),as=pd(S.set.asof),z=n=>String(n).padStart(2,'0'),ds=d=>d.getFullYear()+z(d.getMonth()+1)+z(d.getDate()),stamp=new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z',ic=s=>String(s).replace(/[\;,]/g,m=>'\\'+m).replace(/\n/g,'\\n');
+const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Payday Planner//EN','CALSCALE:GREGORIAN'];
+const ev=(uid,d,sum,desc,trig)=>L.push('BEGIN:VEVENT','UID:'+uid+'@payday-planner','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ds(d),'DTEND;VALUE=DATE:'+ds(addD(d,1)),'SUMMARY:'+ic(sum),'DESCRIPTION:'+ic(desc),'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+ic(sum),'TRIGGER:'+trig,'END:VALARM','END:VEVENT');
+items(t,end).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as).forEach(x=>ev('b'+x.e.id+'-'+x.k,x.d,x.e.n+' due '+fmt(x.a),'Due '+sdy(x.d),'-PT15H'));
+for(let w=wkStart(t);w<=end;w=addD(w,7)){const b=items(w,addD(w,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);if(b.length)ev('w'+ymd(w),w,'Pay week: '+fmt(b.reduce((s,x)=>s+ +x.a,0))+' in bills',b.map(x=>sd(x.d)+' '+x.e.n+' '+fmt(x.a)).join('\n'),'PT9H')}
+L.push('END:VCALENDAR');
+try{const b=new Blob([L.join('\r\n')],{type:'text/calendar'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-reminders.ics';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The calendar file could not be created.';render()}}
+function notifZone(){let h='<div class="zone"><b>Reminders</b><div class="small">The dashboard lists this pay week’s bills at the start of the week, and any bill due tomorrow.</div>';
+if(!window.claude){h+='<div class="acts" style="justify-content:flex-start;flex-wrap:wrap">';
+if(window.Notification){const p=Notification.permission;h+=p==='granted'?'<span class="small">Device alerts are on. They show when you open the app.</span>':p==='denied'?'<span class="small">Device alerts are blocked in this browser’s settings.</span>':'<button class="btn ghost" data-notif type="button">Turn on device alerts</button>'}
+h+='<button class="btn ghost" data-ics type="button">Download calendar reminders</button></div><div class="small">Calendar reminders add the next 60 days of bills to your phone’s calendar, with an alert the day before each bill and one at the start of each pay week. Those work even when the app is closed. Download again after big changes.</div>'}
+return h+'</div>'}
 function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY),sv=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
 const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
 let h='';
 if(!S.e.length)h+=`<div class="card hero"><div class="big">Start with your paycheck</div><div class="lbl">Add the income and bills you expect. The planner then shows what each paycheck covers.</div><div class="acts" style="justify-content:flex-start"><button class="btn" data-add="${ymd(t)}" type="button">Add entry</button></div></div>`;
 else if(stale>7)h+=`<div class="alert">Your balance was last updated ${stale} days ago. Update it so the plan matches your bank. <button class="btn sm" data-bal type="button">Update balance</button></div>`;
+const rm=reminders();rm.forEach(r=>{h+=`<div class="alert"><b>${esc(r.title)}</b><div class="small">${esc(r.body)}</div>${r.kind==='w'?'<div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="btn ghost sm" data-ack type="button">Got it</button></div>':''}</div>`});
 h+=`<div class="card hero ${ok?'':'short'}"><div class="lbl">This budget week (${sd(w.a)} – ${sd(w.b)})</div><div class="big">${w.status==='short'?'Shortfall: '+fmt(w.end):msg}</div><div class="lbl">Next payday in ${days} day${days===1?'':'s'} (${sd(nxt)})</div></div>`;
 h+=`<div class="grid"><div class="card"><div class="lbl">Balance now${stale>0?' · as of '+sd(as):''}</div><div class="big">${fmt(S.set.bal)}</div><div class="acts" style="margin-top:6px;justify-content:flex-start"><button class="btn ghost sm" data-bal type="button">Update balance</button></div></div>
 <div class="card"><div class="lbl">Bills still due</div><div class="big exp">${fmt(w.re)}</div></div>
@@ -393,7 +418,7 @@ ${fld('Target date (optional)','gd',g.d,'date')}<div class="small">With a date, 
 <div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
 function setDlg(){const s=S.set;wipeArmed=false;
 dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
-<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
+${notifZone()}<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
 async function doWipe(){clearTimeout(qt);
 if(mode==='cloud'&&ref){dirty=false;
 try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
@@ -402,7 +427,7 @@ else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
 $('#dlg').close();render()}
 const v=id=>$('#'+id).value;
 function after(){const d=$('#dlg');if(d.open&&dlgDay)dayDlg(dlgDay);render()}
-document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-osave],[data-bal],[data-bsave],[data-undo],[data-wipe],[data-export],[data-import],[data-new]');
+document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-osave],[data-bal],[data-bsave],[data-undo],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
 if(t.id==='stat'){if(status==='error'){dirty=true;retried=false;flush()}return}
 if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
 if(t.id==='bAcc'){const w=forecast(1)[0],sn=snap();S.g.forEach(g=>{const x=w.gd[g.id]||0;if(!x)return;if(g.k==='d'){g.o=r2(Math.max(0,+g.o-x));S.set.bal=r2(+S.set.bal-x)}else g.s=r2(+g.s+x)});S.acc[ymd(w.a)]=1;save();render();return toast('Plan accepted for this week',sn)}
@@ -435,13 +460,16 @@ if(k==='d'){if(!(+v('go')>0))return;o={n:v('gn').trim(),k:'d',o:+v('go'),i:+v('g
 else{if(!(+v('gt')>0))return;o={n:v('gn').trim(),k:'s',t:+v('gt'),s:+v('gs')||0,d:v('gd'),p:+v('gp')}}
 if(id){const i=S.g.findIndex(x=>x.id==id);if(i>=0)S.g[i]={id,...o}}else S.g.push({id:S.nid++,...o});save();$('#dlg').close();render()}
 else if('gdel'in d){const g=S.g.find(x=>x.id==d.gdel),sn=snap();S.g=S.g.filter(x=>x.id!=d.gdel);save();$('#dlg').close();render();toast('Deleted '+(g?g.n:'goal'),sn)}
-else if('sset'in d){S.set={payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0};save();$('#dlg').close();render()}
+else if('sset'in d){S.set=Object.assign({},S.set,{payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0});save();$('#dlg').close();render()}
 else if('bal'in d)balDlg()
 else if('bsave'in d){const sn=snap();S.set.bal=r2(+v('bb')||0);S.set.asof=ymd(today());save();$('#dlg').close();render();toast('Balance updated',sn)}
 else if('undo'in d){const tt=$('#toast');if(tt._sn){S=norm(JSON.parse(tt._sn));save();tt.hidden=true;tt._sn=null;render()}}
 else if('dismiss'in d){notice='';render()}
 else if('keep'in d){S.demo=false;save();render()}
 else if('clear'in d){const sn=snap();S.e=[];S.g=[];S.acc={};S.set.bal=0;S.set.buf=0;S.demo=false;save();render();toast('Samples cleared',sn)}
+else if('ack'in d){S.set.ack=ymd(wkStart(today()));save();render()}
+else if('notif'in d){Notification.requestPermission().then(()=>{setDlg();checkNotify()})}
+else if('ics'in d)downloadIcs()
 else if('wipe'in d){if(!wipeArmed){wipeArmed=true;c.textContent='Click again to delete everything';return}doWipe()}
 else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
 else if('export'in d)exportData()
@@ -455,6 +483,7 @@ $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.va
 r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup imported.'}catch(x){notice='That file is not a Payday Planner backup.'}$('#dlg').close();render()};
 r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state==='ready'&&S)render()});
 boot();
 </script>
 </body>
