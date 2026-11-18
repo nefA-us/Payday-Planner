@@ -15,9 +15,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* Layout: one column. Header with account + save status, notes, tab bar, then the active view. */
-:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--res:#a8700f;--acc:#14231e;--accf:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}
+:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--res:#a8700f;--debt:#7a4fb5;--acc:#14231e;--accf:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--debt:#b99bf0;--acc:#e8efeb;--accf:#0f1714}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--debt:#b99bf0;--acc:#e8efeb;--accf:#0f1714}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Instrument Sans",system-ui,-apple-system,Segoe UI,sans-serif;font-variant-numeric:tabular-nums}
 main{max-width:1000px;margin:0 auto;padding-block:12px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -111,6 +111,9 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 .dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;max-width:90%}
 .dot{display:block;width:7px;height:7px;border-radius:50%;color:var(--exp);background:currentColor}
 .dot.i{color:var(--inc)}
+.dot.g{color:var(--debt)}
+.chip.debt{color:var(--debt)}
+.dc{color:var(--debt)}
 .dot.p{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
 .legend{font-size:12px;color:var(--mut);margin:6px 0}
 .pw{margin-top:8px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
@@ -371,14 +374,14 @@ let h=`<div class="cal-head"><button class="btn ghost" data-m="-1" aria-label="P
 h+='<div class="cal-wide"><div class="scroll"><div class="mg">';
 for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined,{weekday:'short'})}</div>`;
 h+='<div class="mh">Pay plan</div>';for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k),bv=bal[k];
-h+=`<div class="mc ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-add="${k}"><div class="nm">${d.getDate()}</div>`+its.slice(0,3).map(x=>`<button class="chip ${x.e.t==='i'?'inc':'exp'} ${x.p?'paid':''}" data-occ="${x.e.id}:${x.k}" title="${esc(x.e.n)}" type="button">${x.p?'✓ ':''}${esc(x.e.n)} ${fmt(x.a)}</button>`).join('')+(its.length>3?`<button class="more chip" data-day="${k}" type="button">+${its.length-3} more</button>`:'')+(bv!==undefined?`<div class="db ${bv<0?'neg':''}">${fmt(bv)}</div>`:'')+`</div>`;if(d.getDay()===6)h+=psum(addD(d,-6),W)}
+h+=`<div class="mc ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-add="${k}"><div class="nm">${d.getDate()}</div>`+its.slice(0,3).map(x=>`<button class="chip ${x.e.t==='i'?'inc':'exp'} ${x.e.gl?'debt':''} ${x.p?'paid':''}" data-occ="${x.e.id}:${x.k}" title="${esc(x.e.n)}" type="button">${x.p?'✓ ':''}${esc(x.e.n)} ${fmt(x.a)}</button>`).join('')+(its.length>3?`<button class="more chip" data-day="${k}" type="button">+${its.length-3} more</button>`:'')+(bv!==undefined?`<div class="db ${bv<0?'neg':''}">${fmt(bv)}</div>`:'')+`</div>`;if(d.getDay()===6)h+=psum(addD(d,-6),W)}
 h+='</div></div><div class="small" style="margin-top:6px">Click a day to add an entry, or an entry to change just that one, skip it, or mark it paid. The small number at the bottom of each day is your projected balance. The Pay plan column shows how the paycheck landing that week is split: bills until the next payday, money held for heavy weeks, and goals.</div></div>';
 // Phone layout
 h+='<div class="cal-mini"><div class="mini">';
 for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined,{weekday:'narrow'})}</div>`;
 for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k);
-h+=`<button class="mm ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-day="${k}" type="button" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}, ${its.length} item${its.length===1?'':'s'}"><span class="nm">${d.getDate()}</span><span class="dots">${its.slice(0,4).map(x=>`<i class="dot ${x.e.t==='i'?'i':''} ${x.p?'p':''}"></i>`).join('')}</span></button>`}
-h+='</div><div class="legend"><span class="inc">●</span> income &nbsp; <span class="exp">●</span> expense &nbsp; ○ paid. Tap a day to see or add entries.</div>';
+h+=`<button class="mm ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-day="${k}" type="button" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}, ${its.length} item${its.length===1?'':'s'}"><span class="nm">${d.getDate()}</span><span class="dots">${its.slice(0,4).map(x=>`<i class="dot ${x.e.t==='i'?'i':''} ${x.e.gl?'g':''} ${x.p?'p':''}"></i>`).join('')}</span></button>`}
+h+='</div><div class="legend"><span class="inc">●</span> income &nbsp; <span class="exp">●</span> expense &nbsp; <span class="dc">●</span> debt payment &nbsp; ○ paid. Tap a day to see or add entries.</div>';
 h+='<h2 style="margin-top:12px">Pay plan by week</h2>';
 for(let d=new Date(s);d<=end;d=addD(d,7))h+=`<div class="pw">${psum(d,W)}</div>`;
 h+=`<h2 style="margin-top:12px">This month</h2><div class="card">`+(mo.map(x=>orow(x)).join('')||'<div class="small">Nothing scheduled this month.</div>')+'</div></div>';
