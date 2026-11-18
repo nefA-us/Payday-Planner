@@ -150,7 +150,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 function seed(){const t=today(),f=addD(t,-((t.getDay()+2)%7)),m=d=>ymd(new Date(t.getFullYear(),t.getMonth(),d));
 return{set:{payday:5,bal:600,asof:ymd(t),buf:100},nid:30,
 e:[{id:1,n:'Paycheck',a:900,t:'i',d:ymd(f),r:'w',cat:'Paycheck'},{id:2,n:'Rent',a:1000,t:'e',d:m(1),r:'m',cat:'Housing'},{id:3,n:'Utilities',a:150,t:'e',d:m(5),r:'m',cat:'Utilities'},{id:4,n:'Phone',a:80,t:'e',d:m(12),r:'m',cat:'Utilities'},{id:5,n:'Subscriptions',a:35,t:'e',d:m(15),r:'m',cat:'Subscriptions'},{id:6,n:'Car payment',a:350,t:'e',d:m(28),r:'m',cat:'Transport'},{id:7,n:'Insurance',a:140,t:'e',d:m(28),r:'m',cat:'Insurance'},{id:8,n:'Groceries',a:110,t:'e',d:ymd(addD(f,1)),r:'w',cat:'Food'},{id:9,n:'Credit card minimum',a:60,t:'e',d:m(20),r:'m',cat:'Debt'}],
-g:[{id:1,n:'Emergency fund',k:'s',t:2000,s:300,d:'',p:3},{id:2,n:'Vacation',k:'s',t:800,s:0,d:ymd(addD(t,120)),p:2},{id:3,n:'Credit card',k:'d',o:1800,i:22,m:60,t0:2400,d:ymd(addD(t,300)),p:4}],acc:{},demo:true}}
+g:[{id:1,n:'Emergency fund',k:'s',t:2000,s:300,d:'',p:3},{id:2,n:'Vacation',k:'s',t:800,s:0,d:ymd(addD(t,120)),p:2},{id:3,n:'Credit card',k:'d',o:1800,i:22,m:60,t0:2400,d:ymd(addD(t,300)),p:4},{id:4,n:'Store card',k:'d',o:600,i:27,m:25,t0:900,d:'',p:4}],acc:{},demo:true}}
 const blank=()=>({set:{payday:5,bal:0,asof:ymd(today()),buf:0},nid:1,e:[],g:[],acc:{},demo:false});
 const norm=o=>({set:Object.assign({payday:5,bal:0,asof:ymd(today()),buf:0},o.set||{}),nid:+o.nid||100,e:Array.isArray(o.e)?o.e:[],g:Array.isArray(o.g)?o.g:[],acc:o.acc&&typeof o.acc==='object'?o.acc:{},demo:!!o.demo});
 const clean=()=>JSON.parse(JSON.stringify(S));
@@ -217,17 +217,39 @@ else{if(x.pb&&eff>=as)S.set.bal=r2(+S.set.bal-sg*x.pb);delete x.p;delete x.pb}
 tidy(e,k)}
 const keyOf=s=>{const i=s.indexOf(':');return[+s.slice(0,i),s.slice(i+1)]};
 // Goals
-const room=g=>g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw):g.rem;
+const room=g=>g.rf?g.rf():g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw):g.rem;
 const pay=(B,r,n)=>r>0?B*r/(1-Math.pow(1+r,-n)):B/n;
 function dist(amt,G){const out={},R={};G.forEach(g=>{out[g.id]=0;R[g.id]=room(g)});
 // Goals are funded last, from what is left after bills, reserves and the buffer.
 // A dated goal takes only its even share toward the target (highest priority first).
 [...G].sort((a,b)=>b.p-a.p).forEach(g=>{if(g.dated){const x=Math.max(0,Math.min(g.need,R[g.id],amt));out[g.id]+=x;R[g.id]-=x;amt-=x}});
 // Goals without a date share whatever is left, by priority.
-for(let i=0;i<6&&amt>.5;i++){const o=G.filter(g=>!g.dated&&R[g.id]>.5);if(!o.length)break;const tw=o.reduce((s,g)=>s+g.p,0),base=amt;o.forEach(g=>{const x=Math.min(R[g.id],base*g.p/tw);out[g.id]+=x;R[g.id]-=x;amt-=x})}
+for(let i=0;i<6&&amt>.5;i++){const o=G.filter(g=>(!g.dated||g.more)&&R[g.id]>.5);if(!o.length)break;const tw=o.reduce((s,g)=>s+g.p,0),base=amt;o.forEach(g=>{const x=Math.min(R[g.id],base*g.p/tw);out[g.id]+=x;R[g.id]-=x;amt-=x})}
 return out}
 // Weeks until a debt is gone if the weekly payment is minimums plus the extra
 function payoffWeeks(g,extra){const r=(+g.i||0)/5200,P=(+g.m||0)*12/52+extra;let b=+g.o;if(b<=.5)return 0;for(let n=1;n<=1560;n++){b=b*(1+r)-P;if(b<=.5)return n}return null}
+// Debt payoff method: avalanche (highest interest first) or snowball (smallest balance first)
+const mth=()=>S.set&&S.set.method==='s'?'s':'a';
+const MN={a:'Avalanche',s:'Snowball'};
+const METH={a:'Avalanche sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.',s:'Snowball sends extra money to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.'};
+const orderDebts=ds=>[...ds].sort(mth()==='s'?(a,b)=>(+a.o)-(+b.o):(a,b)=>((+b.i||0)-(+a.i||0))||((+a.o)-(+b.o)));
+// Week-by-week payoff for 2+ debts. Minimums are paid on every debt; extra and any freed minimums go to the target.
+function simDebts(ds,extra){const D=ds.map(g=>({id:g.id,b:+g.o,r:(+g.i||0)/5200,mw:(+g.m||0)*12/52})),res={};
+for(let n=1;n<=1560;n++){let pool=extra;D.forEach(d=>{if(d.b<=.5)pool+=d.mw});
+D.forEach(d=>{if(d.b>.5)d.b=Math.max(0,d.b*(1+d.r)-d.mw)});
+D.filter(d=>d.b>.5).sort(mth()==='s'?(a,b)=>a.b-b.b:(a,b)=>(b.r-a.r)||(a.b-b.b)).forEach(d=>{const x=Math.min(pool,d.b);d.b-=x;pool-=x});
+D.forEach(d=>{if(d.b<=.5){d.b=0;if(res[d.id]===undefined)res[d.id]=n}});
+if(D.every(d=>d.b<=.5))return{res,all:n}}
+return{res,all:null}}
+function debtPlan(W){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5),w=W[0],grp=ds.length>=2,wk={};
+// This week's payment is applied once; later weeks use the average extra the plan expects (at least what dated goals need).
+const rest=W.slice(1),avg=f=>rest.length?rest.reduce((s,x)=>s+f(x),0)/rest.length:0,gdS=x=>ds.reduce((s,g)=>s+(x.gd[g.id]||0),0),ndS=x=>ds.reduce((s,g)=>s+(x.nd[g.id]||0),0),ex=Math.max(avg(gdS),ndS(w));
+const after=ds.map(g=>({...g,o:Math.max(0,(+g.o||0)-(w.gd[g.id]||0))}));
+if(!grp){const g=after[0];if(g)wk[ds[0].id]=g.o<=.5?1:(()=>{const n=payoffWeeks(g,ex);return n===null?null:n+1})();return{grp,ds,order:ds,wk,all:null}}
+const sim=simDebts(after,ex);
+ds.forEach(g=>wk[g.id]=sim.res[g.id]===undefined?null:sim.res[g.id]+1);
+return{grp,ds,order:orderDebts(ds),wk,all:sim.all===null?null:sim.all+1}}
+function debtPlanCard(dp,t0){return `<div class="card" style="margin-bottom:10px"><h2>Debt payoff plan: ${MN[mth()]}</h2><div class="small" style="margin-bottom:6px">${METH[mth()]} Change the method in Settings.</div>`+dp.order.map((g,i)=>`<div class="row"><span>${i+1}. ${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}${fmt(g.o)} owed</span></span><b class="${i?'':'inc'}">${i?'next':'target now'}</b></div>`).join('')+`<div class="small" style="margin-top:6px">${dp.all?'All debts paid around '+sdy(addD(t0,dp.all*7))+' (estimate). ':'At this pace the debts would not be paid off. '}Minimums stay in your bills, and when a debt is paid off its minimum rolls to the next one.</div></div>`}
 // Forecast: budget weeks start on payday; each paycheck funds that week's bills.
 function forecast(N){const as=pd(S.set.asof),w0=wkStart(today()),bal=+S.set.bal,buf=+S.set.buf,W=[];
 for(let i=0;i<N;i++){const a=addD(w0,i*7),b=addD(a,6);let inc=0,exp=0,pinc=0,pexp=0;
@@ -238,15 +260,24 @@ W.forEach(w=>w.cap=Math.max(0,w.net));W[0].cap+=Math.max(0,bal-buf);
 for(let j=1;j<N;j++){let s=Math.max(0,W[j].re-W[j].ri),pool=[...Array(j).keys()].filter(i=>W[i].cap>.5);
 for(let it=0;it<8&&s>.5&&pool.length;it++){const sh=s/pool.length;pool.forEach(i=>{const x=Math.min(sh,W[i].cap);W[i].cap-=x;W[i].res+=x;W[i].R[j]=(W[i].R[j]||0)+x;s-=x});pool=pool.filter(i=>W[i].cap>.5)}
 W[j].short=s}
-const G=S.g.map(g=>g.k==='d'?{id:g.id,k:'d',rem:Math.max(0,+g.o||0),r:(+g.i||0)/5200,mw:(+g.m||0)*12/52,dated:!!g.d,d:g.d,p:g.p,need:0}:{id:g.id,k:'s',rem:Math.max(0,g.t-g.s),r:0,mw:0,dated:!!g.d,d:g.d,p:g.p,need:0});
+const D0=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5),grp=D0.length>=2,DS=[],G=[];
+S.g.forEach(g=>{if(g.k==='d'){const o={id:g.id,k:'d',rem:Math.max(0,+g.o||0),r:(+g.i||0)/5200,mw:(+g.m||0)*12/52,dated:!!g.d,d:g.d,p:g.p,need:0};if(grp&&o.rem>.5)DS.push(o);else G.push(o)}else G.push({id:g.id,k:'s',rem:Math.max(0,g.t-g.s),r:0,mw:0,dated:!!g.d,d:g.d,p:g.p,need:0})});
+// Two or more debts: they share one pool. Extra money goes to one target debt at a time (avalanche or snowball).
+let gg=null;if(grp){gg={id:'D',k:'d',rf:()=>DS.reduce((s,d)=>s+(d.rem>.5?Math.max(0,d.rem*(1+d.r)-d.mw):0),0),dated:DS.some(d=>d.dated),more:true,p:Math.max(...DS.map(d=>d.p)),need:0,rem:0,r:0,mw:0};G.push(gg)}
 let start=bal,saved=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
 W.forEach((w,i)=>{w.start=start;w.end=start+w.net;start=w.end;
 w.held=0;for(let k=0;k<=i;k++)for(const j in W[k].R)if(+j>i)w.held+=W[k].R[j];
 w.avail=w.end-w.held-saved-buf;
 w.nd={};w.left={};
-G.forEach(g=>{if(g.dated){const n=Math.max(1,Math.ceil(Math.round((pd(g.d)-w.a)/DAY)/7));g.need=g.k==='d'?Math.max(0,pay(g.rem,g.r,n)-g.mw):g.rem/n;w.nd[g.id]=g.need;w.left[g.id]=n}});
+const nW=g=>Math.max(1,Math.ceil(Math.round((pd(g.d)-w.a)/DAY)/7));
+G.forEach(g=>{if(g.dated&&!g.rf){const n=nW(g);g.need=g.k==='d'?Math.max(0,pay(g.rem,g.r,n)-g.mw):g.rem/n;w.nd[g.id]=g.need;w.left[g.id]=n}});
+DS.forEach(d=>{if(d.dated&&d.rem>.5){const n=nW(d);d.need=Math.max(0,pay(d.rem,d.r,n)-d.mw);w.nd[d.id]=d.need;w.left[d.id]=n}});
+if(gg)gg.need=DS.reduce((s,d)=>s+(d.dated&&d.rem>.5?d.need:0),0);
 const cap=Math.max(0,w.avail);w.gd=dist(cap,G);w.goal=Object.values(w.gd).reduce((s,x)=>s+x,0);saved+=w.goal;
-G.forEach(g=>{const x=w.gd[g.id]||0;g.rem=g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw-x):Math.max(0,g.rem-x)});
+if(gg){let X=(w.gd.D||0)+DS.reduce((s,d)=>s+(d.rem<=.5?d.mw:0),0);delete w.gd.D;DS.forEach(d=>w.gd[d.id]=0);
+[...DS].filter(d=>d.rem>.5).sort(mth()==='s'?(a,b)=>a.rem-b.rem:(a,b)=>(b.r-a.r)||(a.rem-b.rem)).forEach(d=>{const x=Math.min(X,Math.max(0,d.rem*(1+d.r)-d.mw));w.gd[d.id]=x;X-=x})}
+G.forEach(g=>{if(g.rf)return;const x=w.gd[g.id]||0;g.rem=g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw-x):Math.max(0,g.rem-x)});
+DS.forEach(d=>{const x=w.gd[d.id]||0;d.rem=d.rem>.5?Math.max(0,d.rem*(1+d.r)-d.mw-x):0});
 w.status=w.end<0?'short':w.ri>=w.re?'ok':'reserve'});
 return W}
 // Undo
@@ -271,9 +302,9 @@ $('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Spending:sp
 // One line for an occurrence, with a Paid / Received toggle
 const orow=(x,dt=true)=>`<div class="row ${x.p?'paid':''}"><button class="lk" data-occ="${x.e.id}:${x.k}" type="button">${dt?sd(x.d)+' · ':''}${esc(x.e.n)}${x.e.r!=='o'?' ↻':''}${!x.p&&x.d<today()&&x.d>=pd(S.set.asof)?'<span class="tag">overdue</span>':''}</button><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.a)}</b> <button class="btn ghost sm" data-tog="${x.e.id}:${x.k}" type="button">${x.p?'Undo':x.e.t==='i'?'Received':'Paid'}</button></span></div>`;
 // Dashboard summary of debts: what is owed, this payday's extra payment, and the estimated debt-free date
-function debtCard(W,t){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5);if(!ds.length)return '';const w=W[0],t0=wkStart(t),mo=items(new Date(t.getFullYear(),t.getMonth(),1),new Date(t.getFullYear(),t.getMonth()+1,0)).filter(x=>x.e.t==='e'&&x.e.cat==='Debt'),paidM=mo.reduce((s,x)=>s+(+x.a),0);
+function debtCard(W,t){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5);if(!ds.length)return '';const w=W[0],dp=debtPlan(W),t0=wkStart(t),mo=items(new Date(t.getFullYear(),t.getMonth(),1),new Date(t.getFullYear(),t.getMonth()+1,0)).filter(x=>x.e.t==='e'&&x.e.cat==='Debt'),paidM=mo.reduce((s,x)=>s+(+x.a),0);
 const owed=ds.reduce((s,g)=>s+ +g.o,0),orig=ds.reduce((s,g)=>s+Math.max(+g.t0||0,+g.o),0),p=orig?Math.min(100,(orig-owed)/orig*100):0;
-return `<div class="card" style="margin-top:10px"><h2>Debt</h2><div class="big exp">${fmt(owed)}</div><div class="lbl">owed across ${ds.length} debt${ds.length===1?'':'s'}</div><div class="bar"><i style="width:${p}%"></i></div>`+ds.map(g=>{const ex=Math.max(w.gd[g.id]||0,w.nd[g.id]||0),wk=payoffWeeks(g,ex);return `<div class="row"><span>${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}extra ${fmt(w.gd[g.id]||0)} this payday${wk?' · free ~'+sdy(addD(t0,wk*7)):''}</span></span><b class="exp">${fmt(g.o)}</b></div>`}).join('')+`<div class="small" style="margin-top:6px">Debt payments in your bills this month: ${fmt(paidM)} (entries with the category Debt).</div></div>`}
+return `<div class="card" style="margin-top:10px"><h2>Debt</h2><div class="big exp">${fmt(owed)}</div><div class="lbl">owed across ${ds.length} debt${ds.length===1?'':'s'}</div><div class="bar"><i style="width:${p}%"></i></div>`+(dp.grp?`<div class="small">Method: ${MN[mth()]}. Extra money goes to ${esc(dp.order[0].n)} first.</div>`:'')+(dp.grp?dp.order:ds).map(g=>{const wk=dp.wk[g.id];return `<div class="row"><span>${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}extra ${fmt(w.gd[g.id]||0)} this payday${wk?' · free ~'+sdy(addD(t0,wk*7)):''}</span></span><b class="exp">${fmt(g.o)}</b></div>`}).join('')+`<div class="small" style="margin-top:6px">Debt payments in your bills this month: ${fmt(paidM)} (entries with the category Debt).</div></div>`}
 // Reminders: this pay week's bills, and anything due tomorrow
 const NKEY='payday_sent';
 function reminders(){const t=today(),as=pd(S.set.asof),w0=wkStart(t),out=[],wk=items(w0,addD(w0,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);
@@ -371,13 +402,13 @@ return `<div class="cal-head"><button class="btn ghost" data-sm="-1" aria-label=
 <div class="small" style="margin-top:8px">This summary uses the amounts on your calendar, including changes to single payments. Give each entry a category when you add or edit it.</div>`}
 const RN={o:'One time',w:'Weekly',b:'Every 2 weeks',m:'Monthly'};
 function ents(){return `<div class="cal-head"><h2>Income and expenses</h2><button class="btn" data-add="${ymd(today())}" type="button">Add entry</button></div><div class="card">`+(S.e.length?S.e.map(e=>`<div class="row"><span>${esc(e.n)} <span class="small">${RN[e.r]} from ${sd(pd(e.d))}${e.end?' to '+sd(pd(e.end)):''}${e.cat?' · '+esc(e.cat):''}</span></span><span><b class="${e.t==='i'?'inc':'exp'}">${e.t==='i'?'+':'−'}${fmt(e.a)}</b> <button class="btn ghost sm" data-edit="${e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">No entries yet. Use Add entry to enter a paycheck or a bill.</div>')+'</div>'}
-function goals(){const W=forecast(10),w=W[0],t0=wkStart(today());
-let h=`<div class="cal-head"><h2>Goals</h2><button class="btn" data-goal="0" type="button">Add goal</button></div><div class="small" style="margin-bottom:8px">Goals are funded last, from money left after bills, heavy-week reserves and your safety buffer. For a goal with a date, the planner works backwards from the target and asks for an even amount each payday until then. If a payday falls short, the amount needed on later paydays rises to catch up. Debt payoff goals are extra payments on top of your minimums: they reduce what you owe, they are not counted as savings, and interest is included.</div><div class="grid">`;
+function goals(){const W=forecast(10),w=W[0],t0=wkStart(today()),dp=debtPlan(W);
+let h=`<div class="cal-head"><h2>Goals</h2><button class="btn" data-goal="0" type="button">Add goal</button></div><div class="small" style="margin-bottom:8px">Goals are funded last, from money left after bills, heavy-week reserves and your safety buffer. For a goal with a date, the planner works backwards from the target and asks for an even amount each payday until then. If a payday falls short, the amount needed on later paydays rises to catch up. Debt payoff goals are extra payments on top of your minimums: they reduce what you owe, they are not counted as savings, and interest is included. With two or more debts, extra money follows your payoff method in Settings.</div>${dp.grp?debtPlanCard(dp,t0):''}<div class="grid">`;
 h+=S.g.length?S.g.map(g=>{const plan=w.gd[g.id]||0,nd=w.nd[g.id]||0,n=w.left[g.id]||1;let info,top;
-if(g.k==='d'){const o=Math.max(0,+g.o||0),t0b=Math.max(+g.t0||o,o),p=t0b?Math.min(100,(t0b-o)/t0b*100):100,ex=Math.max(plan,nd),wk=payoffWeeks(g,ex);
-top=`<b>${esc(g.n)}</b> <span class="small">debt</span><div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(o)} owed${g.i?' at '+(+g.i)+'% APR':''}${+g.m?' · minimum '+fmt(g.m)+'/mo is in your bills':''}${g.d?' · debt-free by '+sdy(pd(g.d)):''}</div>`;
+if(g.k==='d'){const o=Math.max(0,+g.o||0),t0b=Math.max(+g.t0||o,o),p=t0b?Math.min(100,(t0b-o)/t0b*100):100,ex=Math.max(plan,nd),wk=dp.wk[g.id],tg=dp.grp&&dp.order[0]&&dp.order[0].id===g.id;
+top=`<b>${esc(g.n)}</b> <span class="small">debt</span>${dp.grp?(tg?' <span class="tag" style="color:var(--inc);border-color:var(--inc)">target now</span>':' <span class="small">#'+(dp.order.findIndex(x=>x.id===g.id)+1)+' in line</span>'):''}<div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(o)} owed${g.i?' at '+(+g.i)+'% APR':''}${+g.m?' · minimum '+fmt(g.m)+'/mo is in your bills':''}${g.d?' · debt-free by '+sdy(pd(g.d)):''}</div>`;
 if(o<=.5)info='<div class="inc"><b>Paid off</b></div>';
-else{info=(g.d?`<div class="row"><span>Extra needed each payday</span><b class="goal">${fmt(nd)}</b></div><div class="small">${pd(g.d)<w.a?'The target date has passed.':n+' payday'+(n===1?'':'s')+' until '+sdy(pd(g.d))}</div>`:'')+`<div class="row"><span>Extra payment this payday</span><b>${fmt(plan)}</b></div>`+(g.d?`<div>${nd-plan>.5?`<span class="exp">Behind: this payday covers ${fmt(plan)} of ${fmt(nd)}</span>`:'<span class="inc">On pace</span>'}</div>`:'')+`<div class="small">${wk===null?'At this pace the payment does not cover the interest, so the balance would not shrink.':wk===0?'':'At about '+fmt(ex+(+g.m||0)*12/52)+' a week in total, debt-free around '+sdy(addD(t0,wk*7))+' (estimate).'}</div>`}}
+else{info=(g.d?`<div class="row"><span>Extra needed each payday</span><b class="goal">${fmt(nd)}</b></div><div class="small">${pd(g.d)<w.a?'The target date has passed.':n+' payday'+(n===1?'':'s')+' until '+sdy(pd(g.d))}</div>`:'')+`<div class="row"><span>Extra payment this payday</span><b>${fmt(plan)}</b></div>`+(g.d?`<div>${(dp.grp?(wk===null||addD(t0,wk*7)>pd(g.d)):nd-plan>.5)?`<span class="exp">${dp.grp?'Behind: at this pace it finishes after the target date':'Behind: this payday covers '+fmt(plan)+' of '+fmt(nd)}</span>`:'<span class="inc">On pace</span>'}</div>`:'')+`<div class="small">${wk===null?'At this pace the payment does not cover the interest, so the balance would not shrink.':wk===0?'':(dp.grp?'Debt-free around ':'At about '+fmt(ex+(+g.m||0)*12/52)+' a week in total, debt-free around ')+sdy(addD(t0,wk*7))+' (estimate).'}</div>`}}
 else{const p=Math.min(100,g.s/g.t*100),rem=Math.max(0,g.t-g.s);
 top=`<b>${esc(g.n)}</b><div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(g.s)} of ${fmt(g.t)}${g.d?' by '+sdy(pd(g.d)):''}</div>`;
 if(rem<=.5)info='<div class="inc"><b>Goal reached</b></div>';
@@ -386,7 +417,7 @@ else info=`<div class="row"><span>Planned this payday</span><b>${fmt(plan)}</b><
 return `<div class="card">${top}<div class="small">priority ${['','low','low','medium','high','high'][g.p]||g.p}</div>${info}<div class="acts"><button class="btn ghost" data-goal="${g.id}" type="button">Edit</button></div></div>`}).join(''):'<div class="card"><div class="small">No goals yet. Add a savings goal or a debt payoff, with a target date, and the planner works backwards to show what to set aside each payday.</div></div>';
 h+='</div>';
 if(S.g.length){h+=`<h2 style="margin-top:14px">Payday-by-payday plan</h2><div class="scroll"><table><tr><th>Payday week</th>${S.g.map(g=>`<th>${esc(g.n)}${g.k==='d'?'<br><span class="small">extra payment</span>':''}${w.nd[g.id]?`<br><span class="small">needs ${fmt(w.nd[g.id])}</span>`:''}</th>`).join('')}<th>Total</th></tr>`;
-W.forEach(x=>{h+=`<tr><td>${sd(x.a)} – ${sd(x.b)}</td>${S.g.map(g=>`<td class="goal">${fmt(x.gd[g.id]||0)}</td>`).join('')}<td><b>${fmt(x.goal)}</b></td></tr>`});
+W.forEach(x=>{h+=`<tr><td>${sd(x.a)} – ${sd(x.b)}</td>${S.g.map(g=>`<td class="goal">${fmt(x.gd[g.id]||0)}</td>`).join('')}<td><b>${fmt(Object.values(x.gd).reduce((q,y)=>q+y,0))}</b></td></tr>`});
 h+='</table></div><div class="small" style="margin-top:6px">Each row is what to set aside or pay from that payday. Weeks with heavy bills are funded first, so goals can get $0 there.</div>'}
 return h}
 function dlg(html){const d=$('#dlg');dlgDay=null;delArmed=false;d.innerHTML=html;if(!d.open)d.showModal()}
@@ -413,11 +444,11 @@ function balDlg(){dlg(`<h2>Update balance</h2><div class="small">Enter what your
 function goalDlg(id){const g=S.g.find(x=>x.id==id)||{n:'',k:'s',t:'',s:0,d:'',p:3},db=g.k==='d';
 dlg(`<h2>${id?'Edit':'Add'} goal</h2>${fld('Name','gn',g.n)}<label>Type<select id="gk"><option value="s" ${db?'':'selected'}>Savings goal</option><option value="d" ${db?'selected':''}>Debt payoff</option></select></label>
 <div id="gs-s" ${db?'hidden':''}>${fld('Target amount','gt',g.t,'number','min="1"')}${fld('Saved so far','gs',g.s,'number','min="0"')}</div>
-<div id="gs-d" ${db?'':'hidden'}>${fld('Amount owed now','go',g.o??'','number','min="0" step="0.01"')}${fld('Interest rate (APR %)','gi',g.i??'','number','min="0" step="0.01"')}${fld('Monthly minimum (already in my bills)','gm',g.m??'','number','min="0" step="0.01"')}${fld('Original balance (for the progress bar, optional)','g0',g.t0??'','number','min="0"')}<div class="small">Debt payoff is extra money on top of your minimum. It lowers what you owe and leaves your bank balance. It is not counted as savings.</div></div>
+<div id="gs-d" ${db?'':'hidden'}>${fld('Amount owed now','go',g.o??'','number','min="0" step="0.01"')}${fld('Interest rate (APR %)','gi',g.i??'','number','min="0" step="0.01"')}${fld('Monthly minimum (already in my bills)','gm',g.m??'','number','min="0" step="0.01"')}${fld('Original balance (for the progress bar, optional)','g0',g.t0??'','number','min="0"')}<div class="small">Debt payoff is extra money on top of your minimum. It lowers what you owe and leaves your bank balance. It is not counted as savings. With two or more debts, extra money follows your payoff method in Settings (Avalanche unless you change it).</div></div>
 ${fld('Target date (optional)','gd',g.d,'date')}<div class="small">With a date, the planner spreads what is needed evenly across your paydays until then.</div><label>Priority<select id="gp"><option value="5" ${g.p==5?'selected':''}>High</option><option value="3" ${g.p==3?'selected':''}>Medium</option><option value="1" ${g.p==1?'selected':''}>Low</option></select></label>
 <div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
 function setDlg(){const s=S.set;wipeArmed=false;
-dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
+dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<label>Debt payoff method (for two or more debts)<select id="sdm"><option value="a" ${mth()==='a'?'selected':''}>Avalanche: highest interest first</option><option value="s" ${mth()==='s'?'selected':''}>Snowball: smallest balance first</option></select></label><div class="small"><b>Avalanche</b> sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.<br><b>Snowball</b> sends it to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.</div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
 ${notifZone()}<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
 async function doWipe(){clearTimeout(qt);
 if(mode==='cloud'&&ref){dirty=false;
@@ -460,7 +491,7 @@ if(k==='d'){if(!(+v('go')>0))return;o={n:v('gn').trim(),k:'d',o:+v('go'),i:+v('g
 else{if(!(+v('gt')>0))return;o={n:v('gn').trim(),k:'s',t:+v('gt'),s:+v('gs')||0,d:v('gd'),p:+v('gp')}}
 if(id){const i=S.g.findIndex(x=>x.id==id);if(i>=0)S.g[i]={id,...o}}else S.g.push({id:S.nid++,...o});save();$('#dlg').close();render()}
 else if('gdel'in d){const g=S.g.find(x=>x.id==d.gdel),sn=snap();S.g=S.g.filter(x=>x.id!=d.gdel);save();$('#dlg').close();render();toast('Deleted '+(g?g.n:'goal'),sn)}
-else if('sset'in d){S.set=Object.assign({},S.set,{payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0});save();$('#dlg').close();render()}
+else if('sset'in d){S.set=Object.assign({},S.set,{payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0,method:v('sdm')});save();$('#dlg').close();render()}
 else if('bal'in d)balDlg()
 else if('bsave'in d){const sn=snap();S.set.bal=r2(+v('bb')||0);S.set.asof=ymd(today());save();$('#dlg').close();render();toast('Balance updated',sn)}
 else if('undo'in d){const tt=$('#toast');if(tt._sn){S=norm(JSON.parse(tt._sn));save();tt.hidden=true;tt._sn=null;render()}}
