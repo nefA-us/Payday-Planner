@@ -8,7 +8,10 @@ This is a plain static site. There is no server and no build step, so it runs on
 
 | File | What it does |
 |---|---|
-| `index.html` | The whole app |
+| `index.html` | The landing page new visitors see |
+| `app.html` | The planner itself |
+| `auth.html` | Sign in / create account screen (accounts coming soon) |
+| `shot-*.png` | Screenshots shown on the landing page |
 | `manifest.webmanifest` | Lets phones install it with its own name and icon |
 | `sw.js` | Lets the app open offline after the first visit |
 | `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App icons for Android, iPhone and browser tabs |

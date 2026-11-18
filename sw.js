@@ -1,7 +1,7 @@
 // Network first, so a new version of the app shows up as soon as the device is online.
 // If the network is unavailable, the last copy saved on the device is used.
-const CACHE = 'payday-planner-v2';
-const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'payday-planner-v3';
+const FILES = ['./', 'index.html', 'app.html', 'auth.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'shot-dashboard.png', 'shot-calendar.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));

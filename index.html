@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Payday Planner</title>
 <meta name="theme-color" content="#14231e">
-<meta name="description" content="Plan each paycheck, upcoming bills and savings goals on a calendar.">
+<meta name="description" content="Plan every paycheck: see what your bills need this week, what to hold for heavy weeks, and what is left for savings and debt.">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -13,478 +13,106 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Payday">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+// Returning visitors and installed copies go straight to the planner. Add ?home to see this page anyway.
+try{var sa=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone,has=localStorage.getItem('payday1')||localStorage.getItem('payday_seen');if((sa||has)&&location.search.indexOf('home')<0)location.replace('app.html')}catch(e){}
+</script>
 <style>
-/* Layout: one column. Header with account + save status, notes, tab bar, then the active view. */
-:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--res:#a8700f;--acc:#14231e;--accf:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}}
-:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--res:#e0aa4f;--acc:#e8efeb;--accf:#0f1714}
+:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--acc:#14231e;--accf:#fff}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--acc:#e8efeb;--accf:#0f1714}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Instrument Sans",system-ui,-apple-system,Segoe UI,sans-serif;font-variant-numeric:tabular-nums}
-main{max-width:1000px;margin:0 auto;padding-block:12px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-h1{font-size:20px;margin:0;letter-spacing:-.01em}
-h2{font-size:16px;margin:0 0 8px}
-nav{display:flex;gap:4px;overflow-x:auto;margin-bottom:14px;border-bottom:1px solid var(--ln)}
-nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--mut);font:inherit;font-weight:600;padding:8px 12px;cursor:pointer;white-space:nowrap}
-nav button.on{color:var(--ink);border-color:var(--ink)}
-button,input,select{font:inherit;color:inherit}
-.btn{background:var(--acc);color:var(--accf);border:0;border-radius:6px;padding:7px 12px;font-weight:600;cursor:pointer}
-.btn.ghost{background:none;color:var(--ink);border:1px solid var(--ln)}
-.btn.del{background:none;color:var(--exp);border:1px solid var(--exp)}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
-.hr{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.acct{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mut);min-width:0}
-.acct img{width:22px;height:22px;border-radius:50%}
-.pill{border:1px solid var(--ln);background:var(--sf);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--mut);cursor:default}
-.pill.ok{color:var(--inc)}.pill.warn{color:var(--res)}.pill.bad{color:var(--exp);cursor:pointer}
-.note{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid var(--ln);border-left:4px solid var(--goal);background:var(--sf);border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px}
-.note .acts{margin:0}
-.center{max-width:460px;margin:40px auto;text-align:center}
-.zone{margin-top:16px;padding-top:10px;border-top:1px solid var(--ln)}
-.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-.card{background:var(--sf);border:1px solid var(--ln);border-radius:8px;padding:12px 14px}
-.big{font-size:26px;font-weight:700;letter-spacing:-.02em}
-.lbl{color:var(--mut);font-size:13px}
-.inc{color:var(--inc)}.exp{color:var(--exp)}.goal{color:var(--goal)}.res{color:var(--res)}
-.hero{border-left:5px solid var(--inc);margin-bottom:10px}
-.hero.short{border-color:var(--exp)}
-.row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--ln)}
-.row:last-child{border:0}
-.bar{height:8px;background:var(--ln);border-radius:4px;overflow:hidden;margin:6px 0 2px}
-.bar i{display:block;height:100%;background:var(--goal)}
-.alert{border-left:4px solid var(--res);background:var(--sf);padding:8px 12px;margin-bottom:8px;border-radius:0 6px 6px 0}
-.alert.bad{border-color:var(--exp)}
-.cal-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.cal-head h2{margin:0;flex:1}
-.chip{display:block;width:100%;text-align:left;border:0;border-radius:3px;margin-top:2px;padding:1px 3px;font-size:11px;line-height:1.3;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:color-mix(in srgb,currentColor 14%,transparent)}
-.scroll{overflow-x:auto}
-.mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(170px,1.4fr);min-width:860px;border:1px solid var(--ln);border-radius:8px;overflow:hidden;background:var(--sf)}
-.mh{padding:6px 4px;text-align:center;font-size:12px;font-weight:600;color:var(--mut);border-bottom:1px solid var(--ln);background:var(--bg)}
-.mc{min-height:104px;padding:4px;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);cursor:pointer;min-width:0;display:flex;flex-direction:column;gap:2px}
-.ps{padding:6px 8px;font-size:12px;background:var(--bg);border-bottom:1px solid var(--ln);min-width:0}
-.ps .row{padding:2px 0;gap:6px}
-.psh{font-weight:600;margin-bottom:3px}
-.mc.out{background:var(--bg)}.mc.out .nm{color:var(--mut);opacity:.6}
-.mc:hover{background:color-mix(in srgb,var(--goal) 7%,var(--sf))}
-.nm{font-size:12px;font-weight:600;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%}
-.mc.today .nm{background:var(--goal);color:var(--sf)}
-.mc .chip{font-size:11px;padding:2px 4px}
-.more{font-size:11px;color:var(--mut);font-weight:600}
-.db{margin-top:auto;font-size:10px;color:var(--mut);text-align:right}
-.db.neg{color:var(--exp);font-weight:600}
-.tot{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 8px;font-size:13px}
-@media (max-width:560px){.mc{min-height:64px;padding:2px}.mc .chip{font-size:9px;padding:1px 2px}.db{display:none}.big{font-size:22px}}
-table{border-collapse:collapse;width:100%;min-width:640px;background:var(--sf)}
-th,td{padding:7px 8px;border-bottom:1px solid var(--ln);text-align:right;white-space:nowrap}
-th:first-child,td:first-child{text-align:left}
-th{font-size:13px;color:var(--mut);font-weight:600}
-dialog{border:1px solid var(--ln);border-radius:10px;background:var(--sf);color:var(--ink);padding:16px;width:min(380px,92vw)}
-dialog::backdrop{background:#0008}
-label{display:block;font-size:13px;color:var(--mut);margin-top:8px}
-input,select{width:100%;padding:7px 8px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);margin-top:2px}
-.acts{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
-.small{font-size:12px;color:var(--mut)}
-/* Pop-ups (entry, goal, settings): fit small screens, scroll when tall, and avoid the iPhone zoom on focus */
-dialog{max-width:calc(100vw - 24px);max-height:calc(100% - 24px);overflow-y:auto;overscroll-behavior:contain}
-dialog input,dialog select{font-size:16px;min-height:40px;color:var(--ink)}
-dialog input[type=date]{-webkit-appearance:none;appearance:none;min-width:0;text-align:left}
-dialog .btn{min-height:40px}
-dialog .acts{flex-wrap:wrap}
-@media (max-width:560px){dialog{width:min(440px,calc(100vw - 24px));margin:max(12px,env(safe-area-inset-top,0px)) auto auto;max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px))}}
-/* Upgrade: occurrences, paid state, mobile calendar, toast */
-[hidden]{display:none!important}
-.chip.paid{text-decoration:line-through;opacity:.6}
-.lk{background:none;border:0;text-align:left;padding:0;font:inherit;cursor:pointer;color:inherit;min-width:0;flex:1}
-.paid .lk{text-decoration:line-through;opacity:.6}
-.btn.sm{padding:4px 10px;font-size:13px}
-.row>span:last-child{white-space:nowrap}
-.tag{font-size:11px;font-weight:700;color:var(--exp);border:1px solid var(--exp);border-radius:999px;padding:0 6px;margin-left:4px}
-dialog .chk{display:flex;align-items:center;gap:8px;color:var(--ink);font-size:15px;margin-top:12px}
-dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));background:var(--acc);color:var(--accf);padding:8px 8px 8px 14px;border-radius:8px;display:flex;gap:10px;align-items:center;z-index:50;max-width:calc(100vw - 24px);box-shadow:0 4px 16px #0005}
-.toast .btn{background:none;color:var(--accf);border:1px solid var(--accf);padding:4px 10px}
-.cal-mini{display:none}
-.mini{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--ln);border-radius:8px;overflow:hidden;background:var(--sf)}
-.mm{border:0;border-right:1px solid var(--ln);border-bottom:1px solid var(--ln);background:none;font:inherit;color:inherit;min-height:54px;padding:3px 0;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}
-.mm.out{background:var(--bg);opacity:.55}
-.mm.today .nm{background:var(--goal);color:var(--sf)}
-.dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;max-width:90%}
-.dot{display:block;width:7px;height:7px;border-radius:50%;color:var(--exp);background:currentColor}
-.dot.i{color:var(--inc)}
-.dot.p{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
-.legend{font-size:12px;color:var(--mut);margin:6px 0}
-.pw{margin-top:8px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
-.row2 .row{border:0}
-@media (max-width:700px){.cal-wide{display:none}.cal-mini{display:block}.cal-head .btn{padding:7px 10px}}
-/* Standalone page: keep content clear of phone status bars and home indicators */
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Instrument Sans",system-ui,-apple-system,Segoe UI,sans-serif}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-[hidden]{display:none!important}
+.w{max-width:1040px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:16px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em;color:inherit;text-decoration:none}
+.logo img{width:32px;height:32px;border-radius:8px}
+.nav{display:flex;gap:8px;align-items:center}
+.btn{display:inline-block;background:var(--acc);color:var(--accf);border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;text-decoration:none;cursor:pointer;text-align:center}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--ln)}
+.btn:focus-visible,a:focus-visible,button:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:center;padding-block:36px 56px}
+h1{font-size:clamp(32px,6vw,52px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;text-wrap:balance}
+.lead{font-size:18px;color:var(--mut);margin:0 0 24px;max-width:34em}
+.cta{display:flex;gap:10px;flex-wrap:wrap}
+.fine{font-size:13px;color:var(--mut);margin-top:12px}
+.shots{display:flex;gap:14px;justify-content:center}
+.shots img{width:48%;max-width:230px;border:1px solid var(--ln);border-radius:18px;box-shadow:0 10px 30px #0002;background:var(--sf)}
+.shots img:last-child{margin-top:34px}
+h2{font-size:28px;letter-spacing:-.02em;margin:0 0 20px;text-wrap:balance}
+section{padding-block:36px;border-top:1px solid var(--ln)}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:18px}
+.card h3{margin:0 0 6px;font-size:17px}
+.card p{margin:0;color:var(--mut);font-size:15px}
+.k{display:inline-block;font-weight:700;color:var(--inc)}
+.steps{counter-reset:s;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));padding:0;margin:0;list-style:none}
+.steps li{counter-increment:s;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:18px}
+.steps li::before{content:counter(s);display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--acc);color:var(--accf);align-items:center;justify-content:center;font-weight:700;margin-bottom:8px}
+.steps b{display:block;margin-bottom:4px}
+.steps span{color:var(--mut);font-size:15px}
+.two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+ol.i{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:15px}
+.acct{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+footer{padding-block:28px 40px;border-top:1px solid var(--ln);color:var(--mut);font-size:14px;display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}
+footer a{color:inherit}
+@media (max-width:760px){.hero{grid-template-columns:1fr;padding-top:12px}.shots{order:-1}.nav .ghost{display:none}}
 </style>
 </head>
 <body>
-<main>
-<header><h1>Payday Planner</h1><div class="hr"><span class="acct" id="acct"></span><button class="pill" id="stat" type="button">Connecting…</button><button class="btn ghost" id="bSet" type="button">Settings</button></div></header>
-<div id="notes"></div>
-<nav id="nav"></nav>
-<div id="view"></div>
-</main>
-<dialog id="dlg"></dialog>
-<input type="file" id="fileIn" accept="application/json,.json" hidden>
-<div id="toast" class="toast" role="status" hidden></div>
-<script>
-const DAY=864e5,TABS=['Dashboard','Calendar','Month ahead','Spending','Entries','Goals'];
-const CATS=['Housing','Utilities','Food','Transport','Insurance','Subscriptions','Debt','Health','Fun','Savings','Other'];
-let S=null,tab='Dashboard',cm=new Date(),spm=new Date();cm.setDate(1);spm.setDate(1);
-// Account and storage state
-let mode='local',state='loading',status='loading',ref=null,account=null,readonly=false,dirty=false,saving=false,first=false,slow=false,notice='',errMsg='',wipeArmed=false,delArmed=false,qt=0,slowT=0,retried=false,dlgDay=null,tT=0;
-const $=s=>document.querySelector(s);
-const pd=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
-const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-const addD=(d,n)=>{const x=new Date(d);x.setDate(x.getDate()+n);return x};
-const fmt=n=>(n<-.5?'-':'')+'$'+Math.abs(Math.round(n)).toLocaleString();
-const r2=n=>Math.round(n*100)/100;
-const today=()=>{const t=new Date();t.setHours(0,0,0,0);return t};
-const sd=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-const sdy=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function seed(){const t=today(),f=addD(t,-((t.getDay()+2)%7)),m=d=>ymd(new Date(t.getFullYear(),t.getMonth(),d));
-return{set:{payday:5,bal:600,asof:ymd(t),buf:100},nid:30,
-e:[{id:1,n:'Paycheck',a:900,t:'i',d:ymd(f),r:'w',cat:'Paycheck'},{id:2,n:'Rent',a:1000,t:'e',d:m(1),r:'m',cat:'Housing'},{id:3,n:'Utilities',a:150,t:'e',d:m(5),r:'m',cat:'Utilities'},{id:4,n:'Phone',a:80,t:'e',d:m(12),r:'m',cat:'Utilities'},{id:5,n:'Subscriptions',a:35,t:'e',d:m(15),r:'m',cat:'Subscriptions'},{id:6,n:'Car payment',a:350,t:'e',d:m(28),r:'m',cat:'Transport'},{id:7,n:'Insurance',a:140,t:'e',d:m(28),r:'m',cat:'Insurance'},{id:8,n:'Groceries',a:110,t:'e',d:ymd(addD(f,1)),r:'w',cat:'Food'},{id:9,n:'Credit card minimum',a:60,t:'e',d:m(20),r:'m',cat:'Debt'}],
-g:[{id:1,n:'Emergency fund',k:'s',t:2000,s:300,d:'',p:3},{id:2,n:'Vacation',k:'s',t:800,s:0,d:ymd(addD(t,120)),p:2},{id:3,n:'Credit card',k:'d',o:1800,i:22,m:60,t0:2400,d:ymd(addD(t,300)),p:4}],acc:{},demo:true}}
-const blank=()=>({set:{payday:5,bal:0,asof:ymd(today()),buf:0},nid:1,e:[],g:[],acc:{},demo:false});
-const norm=o=>({set:Object.assign({payday:5,bal:0,asof:ymd(today()),buf:0},o.set||{}),nid:+o.nid||100,e:Array.isArray(o.e)?o.e:[],g:Array.isArray(o.g)?o.g:[],acc:o.acc&&typeof o.acc==='object'?o.acc:{},demo:!!o.demo});
-const clean=()=>JSON.parse(JSON.stringify(S));
-// Local (signed-out) storage
-function localLoad(){try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e))S=norm(o)}catch(e){}if(!S)S=seed()}
-function localSave(){try{localStorage.setItem('payday1',JSON.stringify(S))}catch(e){}}
-// Saving: cloud documents are written one at a time, after a short pause
-function save(){if(mode==='cloud'){if(readonly)return;dirty=true;queue()}else localSave()}
-function queue(){clearTimeout(qt);qt=setTimeout(flush,300);paint('saving')}
-async function flush(){if(!ref||saving||!dirty||state!=='ready')return;saving=true;dirty=false;paint('saving');let err=null;
-try{await ref.set(clean())}catch(e){err=e||{}}
-saving=false;
-if(!err){retried=false;if(dirty)queue();else paint('saved');return}
-if(err.code==='invalid_argument'){readonly=true;paint('readonly');render();return}
-dirty=true;paint('error');
-if(err.code==='unavailable'&&!retried){retried=true;setTimeout(flush,1500)}}
-const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…','']};
-function paint(s){if(s)status=s;const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
-$('#acct').innerHTML=account&&mode==='cloud'?`<img src="${esc(account.avatarUrl)}" alt=""><span>${esc(account.name||'You')}</span>`:''}
-// First visit for this account: move the old browser copy if there is one, otherwise start with samples
-async function firstRun(){first=true;let init=null,moved=false;
-try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)){init=norm(o);moved=true}}catch(e){}
-if(!init)init=seed();
-S=init;
-try{await ref.set(clean());state='ready';clearTimeout(slowT);
-if(moved){try{localStorage.removeItem('payday1')}catch(e){}notice='Your planner was moved from this browser to your account. The copy in this browser has been removed.'}
-paint('saved')}
-catch(err){state='ready';clearTimeout(slowT);if(err&&err.code==='invalid_argument'){readonly=true;paint('readonly')}else{dirty=true;paint('error')}}
-first=false;render()}
-function onSnap(snap){if(mode!=='cloud'||state==='deleted'||first)return;
-if(snap.exists){const d=norm(snap.data());
-if(state!=='ready'){S=d;state='ready';clearTimeout(slowT);paint(readonly?'readonly':'saved');render();return}
-if(snap.metadata.hasPendingWrites||dirty||saving)return;
-if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}
-else if(state==='loading'&&!snap.metadata.fromCache&&!snap.metadata.hasPendingWrites)firstRun()}
-function onSnapErr(e){clearTimeout(slowT);if(state==='loading'){state='error';errMsg=e&&e.code==='revoked'?'Your access to this page changed. Ask the person who shared it to share it with you again.':'Your saved data could not be reached'+(e&&e.code?' ('+e.code+')':'')+'. Close this page and open it again to retry.';render()}else paint('error')}
-async function boot(){paint('loading');render();
-let db=null,user=null,me=null;
-try{if(window.claude&&window.claude.use){const r=await Promise.all([claude.use('db'),claude.use('user')]);db=r[0];user=r[1]}}catch(e){}
-if(user){try{me=await user.me()}catch(e){}}
-if(db&&me&&me.id){mode='cloud';account=me;
-try{ref=db.doc('data/users/'+me.id+'/planner');slowT=setTimeout(()=>{if(state==='loading'){slow=true;render()}},10000);ref.onSnapshot(onSnap,onSnapErr)}
-catch(e){onSnapErr(e)}}
-else{mode='local';localLoad();state='ready';paint('local');render()}}
-const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
-// Pattern dates of an entry (before any one-off changes), inside [a,b]
-function occ(e,a,b){const o=[],s=pd(e.d);
-if(e.r==='o'){if(s>=a&&s<=b)o.push(s)}
-else if(e.r==='w'||e.r==='b'){const st=e.r==='w'?7:14;let d=new Date(s);if(d<a)d=addD(d,Math.ceil(Math.round((a-d)/DAY)/st)*st);for(;d<=b;d=addD(d,st))o.push(d)}
-else{let c=new Date(a.getFullYear(),a.getMonth(),1);while(c<=b){const last=new Date(c.getFullYear(),c.getMonth()+1,0).getDate(),d=new Date(c.getFullYear(),c.getMonth(),Math.min(s.getDate(),last));if(d>=s&&d>=a&&d<=b)o.push(d);c=new Date(c.getFullYear(),c.getMonth()+1,1)}}
-return e.end?o.filter(d=>ymd(d)<=e.end):o}
-// Real occurrences in [a,b]: applies skips, moved dates, amount changes and paid marks. k is the original pattern date.
-function items(a,b){const out=[],A=addD(a,-45),B=addD(b,45);
-S.e.forEach(e=>{const seen={};
-occ(e,A,B).forEach(p=>{const k=ymd(p),x=e.ex&&e.ex[k];seen[k]=1;if(x&&x.s)return;const d=x&&x.md?pd(x.md):p;if(d>=a&&d<=b)out.push({e,d,k,a:x&&x.a!=null?+x.a:+e.a,p:!!(x&&x.p)})});
-if(e.ex)for(const k in e.ex){const x=e.ex[k];if(seen[k]||x.s||!x.md||k<e.d||(e.end&&k>e.end))continue;const d=pd(x.md);if(d>=a&&d<=b)out.push({e,d,k,a:x.a!=null?+x.a:+e.a,p:!!x.p})}});
-return out.sort((x,y)=>x.d-y.d||x.e.t.localeCompare(y.e.t))}
-const exOf=(e,k)=>{if(!e.ex)e.ex={};return e.ex[k]||(e.ex[k]={})};
-function tidy(e,k){if(e.ex&&e.ex[k]&&!Object.keys(e.ex[k]).length)delete e.ex[k];if(e.ex&&!Object.keys(e.ex).length)delete e.ex}
-// Mark one occurrence paid or received. If it falls after the balance date, the balance moves with it.
-function setPaid(e,k,on){const x=exOf(e,k),eff=pd(x.md||k),amt=x.a!=null?+x.a:+e.a,as=pd(S.set.asof),sg=e.t==='i'?1:-1;
-if(on){x.p=1;if(eff>=as){S.set.bal=r2(+S.set.bal+sg*amt);x.pb=amt}else x.pb=0}
-else{if(x.pb&&eff>=as)S.set.bal=r2(+S.set.bal-sg*x.pb);delete x.p;delete x.pb}
-tidy(e,k)}
-const keyOf=s=>{const i=s.indexOf(':');return[+s.slice(0,i),s.slice(i+1)]};
-// Goals
-const room=g=>g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw):g.rem;
-const pay=(B,r,n)=>r>0?B*r/(1-Math.pow(1+r,-n)):B/n;
-function dist(amt,G){const out={},R={};G.forEach(g=>{out[g.id]=0;R[g.id]=room(g)});
-// Goals are funded last, from what is left after bills, reserves and the buffer.
-// A dated goal takes only its even share toward the target (highest priority first).
-[...G].sort((a,b)=>b.p-a.p).forEach(g=>{if(g.dated){const x=Math.max(0,Math.min(g.need,R[g.id],amt));out[g.id]+=x;R[g.id]-=x;amt-=x}});
-// Goals without a date share whatever is left, by priority.
-for(let i=0;i<6&&amt>.5;i++){const o=G.filter(g=>!g.dated&&R[g.id]>.5);if(!o.length)break;const tw=o.reduce((s,g)=>s+g.p,0),base=amt;o.forEach(g=>{const x=Math.min(R[g.id],base*g.p/tw);out[g.id]+=x;R[g.id]-=x;amt-=x})}
-return out}
-// Weeks until a debt is gone if the weekly payment is minimums plus the extra
-function payoffWeeks(g,extra){const r=(+g.i||0)/5200,P=(+g.m||0)*12/52+extra;let b=+g.o;if(b<=.5)return 0;for(let n=1;n<=1560;n++){b=b*(1+r)-P;if(b<=.5)return n}return null}
-// Forecast: budget weeks start on payday; each paycheck funds that week's bills.
-function forecast(N){const as=pd(S.set.asof),w0=wkStart(today()),bal=+S.set.bal,buf=+S.set.buf,W=[];
-for(let i=0;i<N;i++){const a=addD(w0,i*7),b=addD(a,6);let inc=0,exp=0,pinc=0,pexp=0;
-items(i===0&&as<a?as:a,b).forEach(x=>{if(x.d<as)return;const m=+x.a;if(x.e.t==='i'){inc+=m;if(x.p)pinc+=m}else{exp+=m;if(x.p)pexp+=m}});
-const ri=inc-pinc,re=exp-pexp;
-W.push({i,a,b,inc,exp,pinc,pexp,ri,re,net:ri-re,res:0,R:{},goal:0,gd:{}})}
-W.forEach(w=>w.cap=Math.max(0,w.net));W[0].cap+=Math.max(0,bal-buf);
-for(let j=1;j<N;j++){let s=Math.max(0,W[j].re-W[j].ri),pool=[...Array(j).keys()].filter(i=>W[i].cap>.5);
-for(let it=0;it<8&&s>.5&&pool.length;it++){const sh=s/pool.length;pool.forEach(i=>{const x=Math.min(sh,W[i].cap);W[i].cap-=x;W[i].res+=x;W[i].R[j]=(W[i].R[j]||0)+x;s-=x});pool=pool.filter(i=>W[i].cap>.5)}
-W[j].short=s}
-const G=S.g.map(g=>g.k==='d'?{id:g.id,k:'d',rem:Math.max(0,+g.o||0),r:(+g.i||0)/5200,mw:(+g.m||0)*12/52,dated:!!g.d,d:g.d,p:g.p,need:0}:{id:g.id,k:'s',rem:Math.max(0,g.t-g.s),r:0,mw:0,dated:!!g.d,d:g.d,p:g.p,need:0});
-let start=bal,saved=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
-W.forEach((w,i)=>{w.start=start;w.end=start+w.net;start=w.end;
-w.held=0;for(let k=0;k<=i;k++)for(const j in W[k].R)if(+j>i)w.held+=W[k].R[j];
-w.avail=w.end-w.held-saved-buf;
-w.nd={};w.left={};
-G.forEach(g=>{if(g.dated){const n=Math.max(1,Math.ceil(Math.round((pd(g.d)-w.a)/DAY)/7));g.need=g.k==='d'?Math.max(0,pay(g.rem,g.r,n)-g.mw):g.rem/n;w.nd[g.id]=g.need;w.left[g.id]=n}});
-const cap=Math.max(0,w.avail);w.gd=dist(cap,G);w.goal=Object.values(w.gd).reduce((s,x)=>s+x,0);saved+=w.goal;
-G.forEach(g=>{const x=w.gd[g.id]||0;g.rem=g.k==='d'?Math.max(0,g.rem*(1+g.r)-g.mw-x):Math.max(0,g.rem-x)});
-w.status=w.end<0?'short':w.ri>=w.re?'ok':'reserve'});
-return W}
-// Undo
-function toast(m,sn){const t=$('#toast');t.innerHTML=`<span>${esc(m)}</span>`+(sn?'<button class="btn" data-undo type="button">Undo</button>':'');t._sn=sn||null;t.hidden=false;clearTimeout(tT);tT=setTimeout(()=>{t.hidden=true},9000)}
-const snap=()=>JSON.stringify(S);
-function notes(){let h='';
-if(mode==='local')h+=`<div class="note"><span>Your planner is saved only in this browser on this device. Use Settings to export a backup or move it to another device.</span></div>`;
-if(readonly)h+=`<div class="note"><span>You have view-only access, so changes are not saved. Ask the person who shared this page for Contributor access.</span></div>`;
-if(notice)h+=`<div class="note"><span>${esc(notice)}</span><span class="acts"><button class="btn ghost" data-dismiss type="button">Dismiss</button></span></div>`;
-if(state==='ready'&&S&&S.demo)h+=`<div class="note"><span>These are sample entries so you can see how the planner works. Replace them with your own.</span><span class="acts"><button class="btn ghost" data-keep type="button">Keep</button><button class="btn" data-clear type="button">Clear samples</button></span></div>`;
-return h}
-function gate(){
-if(state==='loading')return `<div class="card center"><h2>Opening your planner</h2><div class="lbl">${slow?'Still trying to reach your saved data. Your planner opens as soon as it connects.':'Loading your private planner.'}</div></div>`;
-if(state==='error')return `<div class="card center"><h2>Your planner could not open</h2><div class="lbl">${esc(errMsg)}</div></div>`;
-if(state==='deleted')return `<div class="card center"><h2>Your data was deleted</h2><div class="lbl">Nothing is stored for you any more.</div><div class="acts" style="justify-content:center"><button class="btn" data-new type="button">Start a new planner</button></div></div>`;
-return null}
-function render(){paint();$('#notes').innerHTML=notes();
-const g=(state!=='ready'||!S)?gate():null;
-if(g){$('#nav').innerHTML='';$('#view').innerHTML=g;return}
-$('#nav').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
-$('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Spending:spend,Entries:ents,Goals:goals}[tab]();checkNotify()}
-// One line for an occurrence, with a Paid / Received toggle
-const orow=(x,dt=true)=>`<div class="row ${x.p?'paid':''}"><button class="lk" data-occ="${x.e.id}:${x.k}" type="button">${dt?sd(x.d)+' · ':''}${esc(x.e.n)}${x.e.r!=='o'?' ↻':''}${!x.p&&x.d<today()&&x.d>=pd(S.set.asof)?'<span class="tag">overdue</span>':''}</button><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.a)}</b> <button class="btn ghost sm" data-tog="${x.e.id}:${x.k}" type="button">${x.p?'Undo':x.e.t==='i'?'Received':'Paid'}</button></span></div>`;
-// Dashboard summary of debts: what is owed, this payday's extra payment, and the estimated debt-free date
-function debtCard(W,t){const ds=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5);if(!ds.length)return '';const w=W[0],t0=wkStart(t),mo=items(new Date(t.getFullYear(),t.getMonth(),1),new Date(t.getFullYear(),t.getMonth()+1,0)).filter(x=>x.e.t==='e'&&x.e.cat==='Debt'),paidM=mo.reduce((s,x)=>s+(+x.a),0);
-const owed=ds.reduce((s,g)=>s+ +g.o,0),orig=ds.reduce((s,g)=>s+Math.max(+g.t0||0,+g.o),0),p=orig?Math.min(100,(orig-owed)/orig*100):0;
-return `<div class="card" style="margin-top:10px"><h2>Debt</h2><div class="big exp">${fmt(owed)}</div><div class="lbl">owed across ${ds.length} debt${ds.length===1?'':'s'}</div><div class="bar"><i style="width:${p}%"></i></div>`+ds.map(g=>{const ex=Math.max(w.gd[g.id]||0,w.nd[g.id]||0),wk=payoffWeeks(g,ex);return `<div class="row"><span>${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}extra ${fmt(w.gd[g.id]||0)} this payday${wk?' · free ~'+sdy(addD(t0,wk*7)):''}</span></span><b class="exp">${fmt(g.o)}</b></div>`}).join('')+`<div class="small" style="margin-top:6px">Debt payments in your bills this month: ${fmt(paidM)} (entries with the category Debt).</div></div>`}
-// Reminders: this pay week's bills, and anything due tomorrow
-const NKEY='payday_sent';
-function reminders(){const t=today(),as=pd(S.set.asof),w0=wkStart(t),out=[],wk=items(w0,addD(w0,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);
-if(wk.length&&S.set.ack!==ymd(w0))out.push({key:'w'+ymd(w0),kind:'w',title:'New pay week: '+fmt(wk.reduce((s,x)=>s+ +x.a,0))+' in bills',body:wk.map(x=>sd(x.d)+' '+x.e.n+' '+fmt(x.a)).join(', ')});
-const tm=addD(t,1);items(tm,tm).filter(x=>x.e.t==='e'&&!x.p).forEach(x=>out.push({key:'d'+x.e.id+':'+x.k,kind:'d',title:x.e.n+' is due tomorrow',body:fmt(x.a)+' on '+sd(x.d)}));
-return out}
-// Device alerts: each reminder is sent once. They fire when the app is opened or comes back to the front.
-function checkNotify(){if(!window.Notification||window.claude||Notification.permission!=='granted'||!S||state!=='ready')return;let sent={};try{sent=JSON.parse(localStorage.getItem(NKEY))||{}}catch(e){}
-reminders().forEach(r=>{if(sent[r.key])return;sent[r.key]=Date.now();const o={body:r.body,tag:r.key,icon:'icon-192.png'};
-try{if(navigator.serviceWorker&&navigator.serviceWorker.ready)navigator.serviceWorker.ready.then(g=>g.showNotification(r.title,o)).catch(()=>{try{new Notification(r.title,o)}catch(e){}});else new Notification(r.title,o)}catch(e){}});
-Object.keys(sent).forEach(k=>{if(Date.now()-sent[k]>2592e6)delete sent[k]});try{localStorage.setItem(NKEY,JSON.stringify(sent))}catch(e){}}
-// Calendar file: next 60 days of bills with alerts the day before, plus a summary at the start of each pay week
-function downloadIcs(){const t=today(),end=addD(t,60),as=pd(S.set.asof),z=n=>String(n).padStart(2,'0'),ds=d=>d.getFullYear()+z(d.getMonth()+1)+z(d.getDate()),stamp=new Date().toISOString().replace(/[-:]/g,'').slice(0,15)+'Z',ic=s=>String(s).replace(/[\;,]/g,m=>'\\'+m).replace(/\n/g,'\\n');
-const L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Payday Planner//EN','CALSCALE:GREGORIAN'];
-const ev=(uid,d,sum,desc,trig)=>L.push('BEGIN:VEVENT','UID:'+uid+'@payday-planner','DTSTAMP:'+stamp,'DTSTART;VALUE=DATE:'+ds(d),'DTEND;VALUE=DATE:'+ds(addD(d,1)),'SUMMARY:'+ic(sum),'DESCRIPTION:'+ic(desc),'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:'+ic(sum),'TRIGGER:'+trig,'END:VALARM','END:VEVENT');
-items(t,end).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as).forEach(x=>ev('b'+x.e.id+'-'+x.k,x.d,x.e.n+' due '+fmt(x.a),'Due '+sdy(x.d),'-PT15H'));
-for(let w=wkStart(t);w<=end;w=addD(w,7)){const b=items(w,addD(w,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);if(b.length)ev('w'+ymd(w),w,'Pay week: '+fmt(b.reduce((s,x)=>s+ +x.a,0))+' in bills',b.map(x=>sd(x.d)+' '+x.e.n+' '+fmt(x.a)).join('\n'),'PT9H')}
-L.push('END:VCALENDAR');
-try{const b=new Blob([L.join('\r\n')],{type:'text/calendar'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-reminders.ics';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The calendar file could not be created.';render()}}
-function notifZone(){let h='<div class="zone"><b>Reminders</b><div class="small">The dashboard lists this pay week’s bills at the start of the week, and any bill due tomorrow.</div>';
-if(!window.claude){h+='<div class="acts" style="justify-content:flex-start;flex-wrap:wrap">';
-if(window.Notification){const p=Notification.permission;h+=p==='granted'?'<span class="small">Device alerts are on. They show when you open the app.</span>':p==='denied'?'<span class="small">Device alerts are blocked in this browser’s settings.</span>':'<button class="btn ghost" data-notif type="button">Turn on device alerts</button>'}
-h+='<button class="btn ghost" data-ics type="button">Download calendar reminders</button></div><div class="small">Calendar reminders add the next 60 days of bills to your phone’s calendar, with an alert the day before each bill and one at the start of each pay week. Those work even when the app is closed. Download again after big changes.</div>'}
-return h+'</div>'}
-function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY),sv=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
-const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
-let h='';
-if(!S.e.length)h+=`<div class="card hero"><div class="big">Start with your paycheck</div><div class="lbl">Add the income and bills you expect. The planner then shows what each paycheck covers.</div><div class="acts" style="justify-content:flex-start"><button class="btn" data-add="${ymd(t)}" type="button">Add entry</button></div></div>`;
-else if(stale>7)h+=`<div class="alert">Your balance was last updated ${stale} days ago. Update it so the plan matches your bank. <button class="btn sm" data-bal type="button">Update balance</button></div>`;
-const rm=reminders();rm.forEach(r=>{h+=`<div class="alert"><b>${esc(r.title)}</b><div class="small">${esc(r.body)}</div>${r.kind==='w'?'<div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="btn ghost sm" data-ack type="button">Got it</button></div>':''}</div>`});
-h+=`<div class="card hero ${ok?'':'short'}"><div class="lbl">This budget week (${sd(w.a)} – ${sd(w.b)})</div><div class="big">${w.status==='short'?'Shortfall: '+fmt(w.end):msg}</div><div class="lbl">Next payday in ${days} day${days===1?'':'s'} (${sd(nxt)})</div></div>`;
-h+=`<div class="grid"><div class="card"><div class="lbl">Balance now${stale>0?' · as of '+sd(as):''}</div><div class="big">${fmt(S.set.bal)}</div><div class="acts" style="margin-top:6px;justify-content:flex-start"><button class="btn ghost sm" data-bal type="button">Update balance</button></div></div>
-<div class="card"><div class="lbl">Bills still due</div><div class="big exp">${fmt(w.re)}</div></div>
-<div class="card"><div class="lbl">Hold for heavy weeks</div><div class="big res">${fmt(w.held)}</div></div>
-<div class="card"><div class="lbl">Set aside for goals</div><div class="big goal">${fmt(w.goal)}</div></div>
-<div class="card"><div class="lbl">Safe to spend</div><div class="big inc">${fmt(Math.max(0,w.avail-w.goal))}</div></div>
-<div class="card"><div class="lbl">Projected end of week</div><div class="big">${fmt(w.end)}</div></div></div>`;
-h+=`<div class="grid" style="margin-top:10px"><div class="card"><h2>Payday plan</h2>
-<div class="row"><span>Balance on hand</span><b>${fmt(S.set.bal)}</b></div>
-<div class="row"><span>+ Income still to come</span><b class="inc">${fmt(w.ri)}</b></div>
-<div class="row"><span>− Bills still due</span><b class="exp">${fmt(w.re)}</b></div>
-<div class="row"><span>− Held for heavy weeks</span><b class="res">${fmt(w.held)}</b></div>
-<div class="row"><span>− Already saved to goals</span><b class="goal">${fmt(sv)}</b></div>
-<div class="row"><span>− Safety buffer</span><b>${fmt(S.set.buf)}</b></div>
-<div class="row"><span><b>Free to use</b></span><b>${fmt(Math.max(0,w.avail))}</b></div></div>`;
-const acc=S.acc[ymd(w.a)];
-h+=`<div class="card"><h2>Goal recommendation</h2>`+(S.g.length?S.g.map(g=>`<div class="row"><span>${esc(g.n)}${g.k==='d'?' <span class="small">extra payment</span>':''}${w.nd[g.id]?` <span class="small">needs ${fmt(w.nd[g.id])} per payday</span>`:''}</span><b class="goal">${fmt(w.gd[g.id]||0)}</b></div>`).join(''):'<div class="small">Add a goal to get a recommendation.</div>')+
-(acc?'<div class="small">Accepted for this week.</div>':w.goal>0?'<div class="acts"><button class="btn" id="bAcc" type="button">Accept</button></div><div class="small">Accepting adds to your savings goals and records debt payments against what you owe.</div>':'')+`</div></div>`;
-const al=[];W.forEach((x,i)=>{if(x.status==='short')al.push(`<div class="alert bad">Week of ${sd(x.a)} ends ${fmt(x.end)}. Cut spending or move a bill before then.</div>`);
-if(i>0&&x.re>x.ri&&x.short<.5)al.push(`<div class="alert">Heavy week starting ${sd(x.a)}: bills are ${fmt(x.re-x.ri)} above pay.</div>`)});
-if(w.res>0)al.unshift(`<div class="alert">Set aside <b>${fmt(w.res)}</b> from this week’s pay toward upcoming heavy weeks.</div>`);
-const up=items(addD(t,-30),addD(t,14)).filter(x=>x.d>=as&&(x.d>=t||!x.p));
-h+=debtCard(W,t)+`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Coming up</h2>`+(up.map(x=>orow(x)).join('')||'<div class="small">Nothing due in the next 14 days.</div>')+`</div>`;
-return h}
-function cal(){const first=new Date(cm),last=new Date(cm.getFullYear(),cm.getMonth()+1,0),s=addD(first,-first.getDay()),end=addD(last,6-last.getDay()),tk=ymd(today()),as=pd(S.set.asof),bal={};
-if((end-as)/DAY<1500){let b=+S.set.bal;const dl={};items(as,end).forEach(x=>{if(x.p)return;const k=ymd(x.d);dl[k]=(dl[k]||0)+(x.e.t==='i'?1:-1)*x.a});for(let d=new Date(as);d<=end;d=addD(d,1)){const k=ymd(d);b+=dl[k]||0;bal[k]=b}}
-const pdl=addD(addD(end,-6),+S.set.payday),w0=wkStart(today()),W=forecast(Math.max(1,Math.min(60,Math.round((pdl-w0)/DAY/7)+1)));
-const all=items(s,end),mo=all.filter(x=>x.d>=first&&x.d<=last);let ti=0,te=0;mo.forEach(x=>x.e.t==='i'?ti+=+x.a:te+=+x.a);
-let h=`<div class="cal-head"><button class="btn ghost" data-m="-1" aria-label="Previous month" type="button">‹</button><button class="btn ghost" data-m="0" type="button">Today</button><button class="btn ghost" data-m="1" aria-label="Next month" type="button">›</button><h2>${cm.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2><button class="btn" data-add="${tk}" type="button">Add</button></div><div class="tot"><span class="inc">Income ${fmt(ti)}</span><span class="exp">Expenses ${fmt(te)}</span><span>Net ${fmt(ti-te)}</span></div>`;
-// Wide layout (computer / tablet)
-h+='<div class="cal-wide"><div class="scroll"><div class="mg">';
-for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined,{weekday:'short'})}</div>`;
-h+='<div class="mh">Pay plan</div>';for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k),bv=bal[k];
-h+=`<div class="mc ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-add="${k}"><div class="nm">${d.getDate()}</div>`+its.slice(0,3).map(x=>`<button class="chip ${x.e.t==='i'?'inc':'exp'} ${x.p?'paid':''}" data-occ="${x.e.id}:${x.k}" title="${esc(x.e.n)}" type="button">${x.p?'✓ ':''}${esc(x.e.n)} ${fmt(x.a)}</button>`).join('')+(its.length>3?`<button class="more chip" data-day="${k}" type="button">+${its.length-3} more</button>`:'')+(bv!==undefined?`<div class="db ${bv<0?'neg':''}">${fmt(bv)}</div>`:'')+`</div>`;if(d.getDay()===6)h+=psum(addD(d,-6),W)}
-h+='</div></div><div class="small" style="margin-top:6px">Click a day to add an entry, or an entry to change just that one, skip it, or mark it paid. The small number at the bottom of each day is your projected balance. The Pay plan column shows how the paycheck landing that week is split: bills until the next payday, money held for heavy weeks, and goals.</div></div>';
-// Phone layout
-h+='<div class="cal-mini"><div class="mini">';
-for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined,{weekday:'narrow'})}</div>`;
-for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k);
-h+=`<button class="mm ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-day="${k}" type="button" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}, ${its.length} item${its.length===1?'':'s'}"><span class="nm">${d.getDate()}</span><span class="dots">${its.slice(0,4).map(x=>`<i class="dot ${x.e.t==='i'?'i':''} ${x.p?'p':''}"></i>`).join('')}</span></button>`}
-h+='</div><div class="legend"><span class="inc">●</span> income &nbsp; <span class="exp">●</span> expense &nbsp; ○ paid. Tap a day to see or add entries.</div>';
-h+='<h2 style="margin-top:12px">Pay plan by week</h2>';
-for(let d=new Date(s);d<=end;d=addD(d,7))h+=`<div class="pw">${psum(d,W)}</div>`;
-h+=`<h2 style="margin-top:12px">This month</h2><div class="card">`+(mo.map(x=>orow(x)).join('')||'<div class="small">Nothing scheduled this month.</div>')+'</div></div>';
-return h}
-function psum(rs,W){const p=addD(rs,+S.set.payday),w=W.find(x=>ymd(x.a)===ymd(p));
-if(!w)return `<div class="ps"><div class="small">Pay week of ${sd(p)} has passed</div></div>`;
-const gl=S.g.filter(g=>(w.gd[g.id]||0)>.5).map(g=>`<div class="row"><span>${esc(g.n)}${g.k==='d'?' payoff':' goal'}</span><b class="goal">${fmt(w.gd[g.id])}</b></div>`).join('')||'<div class="row"><span>Goals</span><b class="goal">$0</b></div>';
-return `<div class="ps"><div class="psh">Paid ${sd(w.a)}, covers to ${sd(w.b)}</div><div class="row"><span>Paycheck</span><b class="inc">${fmt(w.inc)}</b></div><div class="row"><span>Upcoming expenses</span><b class="exp">${fmt(w.exp)}</b></div><div class="row"><span>Set aside for heavy weeks</span><b class="res">${fmt(w.res)}</b></div>${gl}<div class="row"><span>Left to spend</span><b>${fmt(Math.max(0,w.avail-w.goal))}</b></div>`+(w.status==='short'?`<div class="exp"><b>⚠ Short ${fmt(-w.end)}</b></div>`:'')+`</div>`}
-function dayDlg(k){const its=items(pd(k),pd(k));dlg(`<h2>${pd(k).toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}</h2>`+(its.length?its.map(x=>orow(x,false)).join(''):'<div class="small">Nothing scheduled.</div>')+`<div class="acts"><button class="btn ghost" data-x type="button">Close</button><button class="btn" data-add="${k}" type="button">Add entry</button></div>`);dlgDay=k}
-function plan(){const W=forecast(10);
-let h=`<h2>Month ahead plan</h2><div class="small" style="margin-bottom:8px">Reserve is money to hold back now for a heavy week later. Goals come only from what is left after reserves and your buffer.</div><div class="scroll"><table><tr><th>Week</th><th>Pay</th><th>Bills</th><th>Reserve</th><th>Goals</th><th>Bank end</th><th>Status</th></tr>`;
-W.forEach(w=>{h+=`<tr><td>${sd(w.a)} – ${sd(w.b)}</td><td class="inc">${fmt(w.inc)}</td><td class="exp">${fmt(w.exp)}</td><td class="res">${fmt(w.res)}</td><td class="goal">${fmt(w.goal)}</td><td>${fmt(w.end)}</td><td>${w.status==='short'?'<b class="exp">Short</b>':w.re>w.ri?'<span class="res">Heavy</span>':'Light'}</td></tr>`});
-h+='</table></div>';
-const xs=W.map(w=>w.end),mn=Math.min(0,...xs),mx=Math.max(1,...xs),X=i=>30+i*(640/(W.length-1)),Y=v=>170-(v-mn)/(mx-mn)*150;
-h+=`<div class="card" style="margin-top:12px"><h2>Projected bank balance</h2><svg viewBox="0 0 700 200" width="100%" role="img" aria-label="Projected balance by week"><line x1="30" x2="670" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ln)"/><polyline fill="none" stroke="var(--goal)" stroke-width="2.5" points="${xs.map((v,i)=>X(i)+','+Y(v)).join(' ')}"/>${xs.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="4" fill="${v<0?'var(--exp)':'var(--goal)'}"/><text x="${X(i)}" y="${Y(v)-9}" font-size="11" text-anchor="middle" fill="var(--mut)">${fmt(v)}</text><text x="${X(i)}" y="195" font-size="10" text-anchor="middle" fill="var(--mut)">${sd(W[i].a)}</text>`).join('')}</svg></div>`;
-return h}
-// Spending summary (planned amounts from the calendar, by category)
-function bars(o,tot,cls){const k=Object.keys(o).sort((a,b)=>o[b]-o[a]);return k.length?k.map(c=>`<div class="row2"><div class="row"><span>${esc(c)} <span class="small">${tot?Math.round(o[c]/tot*100):0}%</span></span><b class="${cls}">${fmt(o[c])}</b></div><div class="bar"><i style="width:${tot?o[c]/tot*100:0}%;background:var(--${cls})"></i></div></div>`).join(''):'<div class="small">Nothing this month.</div>'}
-function spend(){const a=new Date(spm),b=new Date(spm.getFullYear(),spm.getMonth()+1,0),its=items(a,b);let ti=0,te=0,pe=0;const ce={},ci={};
-its.forEach(x=>{const c=x.e.cat||'Uncategorized',m=+x.a;if(x.e.t==='i'){ti+=m;ci[c]=(ci[c]||0)+m}else{te+=m;ce[c]=(ce[c]||0)+m;if(x.p)pe+=m}});
-return `<div class="cal-head"><button class="btn ghost" data-sm="-1" aria-label="Previous month" type="button">‹</button><button class="btn ghost" data-sm="0" type="button">This month</button><button class="btn ghost" data-sm="1" aria-label="Next month" type="button">›</button><h2>${spm.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2></div>
-<div class="grid"><div class="card"><div class="lbl">Income</div><div class="big inc">${fmt(ti)}</div></div><div class="card"><div class="lbl">Expenses</div><div class="big exp">${fmt(te)}</div></div><div class="card"><div class="lbl">Left over</div><div class="big">${fmt(ti-te)}</div></div><div class="card"><div class="lbl">Expenses paid so far</div><div class="big">${fmt(pe)}</div><div class="small">${fmt(te-pe)} still to pay</div></div></div>
-<div class="grid" style="margin-top:10px"><div class="card"><h2>Expenses by category</h2>${bars(ce,te,'exp')}</div><div class="card"><h2>Income by category</h2>${bars(ci,ti,'inc')}</div></div>
-<div class="small" style="margin-top:8px">This summary uses the amounts on your calendar, including changes to single payments. Give each entry a category when you add or edit it.</div>`}
-const RN={o:'One time',w:'Weekly',b:'Every 2 weeks',m:'Monthly'};
-function ents(){return `<div class="cal-head"><h2>Income and expenses</h2><button class="btn" data-add="${ymd(today())}" type="button">Add entry</button></div><div class="card">`+(S.e.length?S.e.map(e=>`<div class="row"><span>${esc(e.n)} <span class="small">${RN[e.r]} from ${sd(pd(e.d))}${e.end?' to '+sd(pd(e.end)):''}${e.cat?' · '+esc(e.cat):''}</span></span><span><b class="${e.t==='i'?'inc':'exp'}">${e.t==='i'?'+':'−'}${fmt(e.a)}</b> <button class="btn ghost sm" data-edit="${e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">No entries yet. Use Add entry to enter a paycheck or a bill.</div>')+'</div>'}
-function goals(){const W=forecast(10),w=W[0],t0=wkStart(today());
-let h=`<div class="cal-head"><h2>Goals</h2><button class="btn" data-goal="0" type="button">Add goal</button></div><div class="small" style="margin-bottom:8px">Goals are funded last, from money left after bills, heavy-week reserves and your safety buffer. For a goal with a date, the planner works backwards from the target and asks for an even amount each payday until then. If a payday falls short, the amount needed on later paydays rises to catch up. Debt payoff goals are extra payments on top of your minimums: they reduce what you owe, they are not counted as savings, and interest is included.</div><div class="grid">`;
-h+=S.g.length?S.g.map(g=>{const plan=w.gd[g.id]||0,nd=w.nd[g.id]||0,n=w.left[g.id]||1;let info,top;
-if(g.k==='d'){const o=Math.max(0,+g.o||0),t0b=Math.max(+g.t0||o,o),p=t0b?Math.min(100,(t0b-o)/t0b*100):100,ex=Math.max(plan,nd),wk=payoffWeeks(g,ex);
-top=`<b>${esc(g.n)}</b> <span class="small">debt</span><div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(o)} owed${g.i?' at '+(+g.i)+'% APR':''}${+g.m?' · minimum '+fmt(g.m)+'/mo is in your bills':''}${g.d?' · debt-free by '+sdy(pd(g.d)):''}</div>`;
-if(o<=.5)info='<div class="inc"><b>Paid off</b></div>';
-else{info=(g.d?`<div class="row"><span>Extra needed each payday</span><b class="goal">${fmt(nd)}</b></div><div class="small">${pd(g.d)<w.a?'The target date has passed.':n+' payday'+(n===1?'':'s')+' until '+sdy(pd(g.d))}</div>`:'')+`<div class="row"><span>Extra payment this payday</span><b>${fmt(plan)}</b></div>`+(g.d?`<div>${nd-plan>.5?`<span class="exp">Behind: this payday covers ${fmt(plan)} of ${fmt(nd)}</span>`:'<span class="inc">On pace</span>'}</div>`:'')+`<div class="small">${wk===null?'At this pace the payment does not cover the interest, so the balance would not shrink.':wk===0?'':'At about '+fmt(ex+(+g.m||0)*12/52)+' a week in total, debt-free around '+sdy(addD(t0,wk*7))+' (estimate).'}</div>`}}
-else{const p=Math.min(100,g.s/g.t*100),rem=Math.max(0,g.t-g.s);
-top=`<b>${esc(g.n)}</b><div class="bar"><i style="width:${p}%"></i></div><div class="lbl">${fmt(g.s)} of ${fmt(g.t)}${g.d?' by '+sdy(pd(g.d)):''}</div>`;
-if(rem<=.5)info='<div class="inc"><b>Goal reached</b></div>';
-else if(g.d){const late=pd(g.d)<w.a;info=`<div class="row"><span>Needed each payday</span><b class="goal">${fmt(nd)}</b></div><div class="small">${late?'The target date has passed, so the full amount is needed now.':n+' payday'+(n===1?'':'s')+' until '+sdy(pd(g.d))}</div><div class="row"><span>Planned this payday</span><b>${fmt(plan)}</b></div><div>${nd-plan>.5?`<span class="exp">Behind: this payday covers ${fmt(plan)} of ${fmt(nd)}</span>`:'<span class="inc">On pace</span>'}</div>`}
-else info=`<div class="row"><span>Planned this payday</span><b>${fmt(plan)}</b></div><div class="small">No target date. It gets what is left after bills, reserves and your buffer.</div>`}
-return `<div class="card">${top}<div class="small">priority ${['','low','low','medium','high','high'][g.p]||g.p}</div>${info}<div class="acts"><button class="btn ghost" data-goal="${g.id}" type="button">Edit</button></div></div>`}).join(''):'<div class="card"><div class="small">No goals yet. Add a savings goal or a debt payoff, with a target date, and the planner works backwards to show what to set aside each payday.</div></div>';
-h+='</div>';
-if(S.g.length){h+=`<h2 style="margin-top:14px">Payday-by-payday plan</h2><div class="scroll"><table><tr><th>Payday week</th>${S.g.map(g=>`<th>${esc(g.n)}${g.k==='d'?'<br><span class="small">extra payment</span>':''}${w.nd[g.id]?`<br><span class="small">needs ${fmt(w.nd[g.id])}</span>`:''}</th>`).join('')}<th>Total</th></tr>`;
-W.forEach(x=>{h+=`<tr><td>${sd(x.a)} – ${sd(x.b)}</td>${S.g.map(g=>`<td class="goal">${fmt(x.gd[g.id]||0)}</td>`).join('')}<td><b>${fmt(x.goal)}</b></td></tr>`});
-h+='</table></div><div class="small" style="margin-top:6px">Each row is what to set aside or pay from that payday. Weeks with heavy bills are funded first, so goals can get $0 there.</div>'}
-return h}
-function dlg(html){const d=$('#dlg');dlgDay=null;delArmed=false;d.innerHTML=html;if(!d.open)d.showModal()}
-const fld=(l,id,v,t='text',x='')=>`<label>${l}<input id="${id}" type="${t}" value="${esc(v)}" ${x}></label>`;
-const catList=()=>[...new Set([...CATS,...S.e.map(e=>e.cat).filter(Boolean)])];
-// One occurrence: change only this one, mark it paid, or skip it
-function occDlg(id,k){const e=S.e.find(x=>x.id==id);if(!e)return;const x=(e.ex&&e.ex[k])||{},amt=x.a!=null?x.a:e.a,dt=x.md||k,rep=e.r!=='o';
-dlg(`<h2>${esc(e.n)}</h2><div class="small">${e.t==='i'?'Income':'Expense'}${e.cat?' · '+esc(e.cat):''} · ${RN[e.r]} · ${sdy(pd(k))}</div>${fld('Amount for this one','oa',amt,'number','min="0" step="0.01"')}${fld('Date for this one','od',dt,'date')}<label class="chk"><input id="op" type="checkbox" ${x.p?'checked':''}> ${e.t==='i'?'Received':'Paid'}</label>${rep?'<div class="small" style="margin-top:8px">Changes here affect only this one. Use Edit series to change future payments or all of them.</div>':''}
-<div class="acts"><button class="btn del" data-skip="${id}:${k}" type="button">${rep?'Skip this one':'Delete'}</button><button class="btn ghost" data-edit="${id}" data-from="${k}" type="button">${rep?'Edit series':'Edit entry'}</button><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-osave="${id}:${k}" type="button">Save</button></div>`)}
-// Whole entry or series. For a repeating bill opened from one date you can change this and future payments only.
-function serDlg(id,from){const e=S.e.find(x=>x.id==id)||{n:'',a:'',t:'e',d:from,r:'o',cat:''},rep=id&&e.r!=='o',split=rep&&from&&from>e.d;
-dlg(`<h2>${id?(rep?'Edit series':'Edit entry'):'Add entry'}</h2>${fld('Name','fn',e.n)}${fld('Amount','fa',e.a,'number','min="0" step="0.01"')}<label>Type<select id="ft"><option value="e" ${e.t==='e'?'selected':''}>Expense</option><option value="i" ${e.t==='i'?'selected':''}>Income</option></select></label>${fld('Category','fc',e.cat||'','text','list="cl" autocomplete="off" placeholder="For example Housing"')}<datalist id="cl">${catList().map(c=>`<option value="${esc(c)}">`).join('')}</datalist>${fld('Date','fd',e.d,'date')}<label>Repeats<select id="fr">${Object.entries(RN).map(([k,v])=>`<option value="${k}" ${e.r===k?'selected':''}>${v}</option>`).join('')}</select></label>${split?`<label>Apply changes to<select id="fsc" data-from="${from}" data-all="${e.d}"><option value="fut">This and future payments (from ${sd(pd(from))})</option><option value="all">All payments</option></select></label><div class="small">Earlier payments stay as they are.</div>`:(rep?'<div class="small">Changes apply to every payment in this series.</div>':'')}
-<div class="acts">${id?`<button class="btn del" data-del="${id}" type="button">${rep?'Delete series':'Delete'}</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-save="${id||0}" data-from="${split?from:''}" type="button">Save</button></div>`);
-if(split)$('#fd').value=from}
-function updSeries(e,o){if(e.r==='o'&&o.r==='o'&&o.d!==e.d&&e.ex&&e.ex[e.d]){const x=e.ex[e.d];delete x.md;e.ex[o.d]=x;delete e.ex[e.d]}
-else if(o.d!==e.d||o.r!==e.r)e.ex={};
-Object.assign(e,o);if(!e.cat)delete e.cat;if(o.r==='o')delete e.end;if(e.ex&&!Object.keys(e.ex).length)delete e.ex}
-// "This and future": close the old series the day before and start a new one with the changes
-function splitSeries(e,k,o){const ne={id:S.nid++,...o,ex:{}};if(!ne.cat)delete ne.cat;
-Object.keys(e.ex||{}).forEach(q=>{if(q>=k){ne.ex[q]=e.ex[q];delete e.ex[q]}});
-if(!Object.keys(ne.ex).length)delete ne.ex;if(e.ex&&!Object.keys(e.ex).length)delete e.ex;
-if(e.end)ne.end=e.end;e.end=ymd(addD(pd(k),-1));S.e.push(ne)}
-function balDlg(){dlg(`<h2>Update balance</h2><div class="small">Enter what your bank shows right now. The planner treats everything before today as already included in this number.</div>${fld('Bank balance now','bb',S.set.bal,'number','step="0.01"')}<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-bsave type="button">Save</button></div>`)}
-function goalDlg(id){const g=S.g.find(x=>x.id==id)||{n:'',k:'s',t:'',s:0,d:'',p:3},db=g.k==='d';
-dlg(`<h2>${id?'Edit':'Add'} goal</h2>${fld('Name','gn',g.n)}<label>Type<select id="gk"><option value="s" ${db?'':'selected'}>Savings goal</option><option value="d" ${db?'selected':''}>Debt payoff</option></select></label>
-<div id="gs-s" ${db?'hidden':''}>${fld('Target amount','gt',g.t,'number','min="1"')}${fld('Saved so far','gs',g.s,'number','min="0"')}</div>
-<div id="gs-d" ${db?'':'hidden'}>${fld('Amount owed now','go',g.o??'','number','min="0" step="0.01"')}${fld('Interest rate (APR %)','gi',g.i??'','number','min="0" step="0.01"')}${fld('Monthly minimum (already in my bills)','gm',g.m??'','number','min="0" step="0.01"')}${fld('Original balance (for the progress bar, optional)','g0',g.t0??'','number','min="0"')}<div class="small">Debt payoff is extra money on top of your minimum. It lowers what you owe and leaves your bank balance. It is not counted as savings.</div></div>
-${fld('Target date (optional)','gd',g.d,'date')}<div class="small">With a date, the planner spreads what is needed evenly across your paydays until then.</div><label>Priority<select id="gp"><option value="5" ${g.p==5?'selected':''}>High</option><option value="3" ${g.p==3?'selected':''}>Medium</option><option value="1" ${g.p==1?'selected':''}>Low</option></select></label>
-<div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
-function setDlg(){const s=S.set;wipeArmed=false;
-dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
-${notifZone()}<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
-async function doWipe(){clearTimeout(qt);
-if(mode==='cloud'&&ref){dirty=false;
-try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
-state='deleted'}
-else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
-$('#dlg').close();render()}
-const v=id=>$('#'+id).value;
-function after(){const d=$('#dlg');if(d.open&&dlgDay)dayDlg(dlgDay);render()}
-document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-osave],[data-bal],[data-bsave],[data-undo],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
-if(t.id==='stat'){if(status==='error'){dirty=true;retried=false;flush()}return}
-if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
-if(t.id==='bAcc'){const w=forecast(1)[0],sn=snap();S.g.forEach(g=>{const x=w.gd[g.id]||0;if(!x)return;if(g.k==='d'){g.o=r2(Math.max(0,+g.o-x));S.set.bal=r2(+S.set.bal-x)}else g.s=r2(+g.s+x)});S.acc[ymd(w.a)]=1;save();render();return toast('Plan accepted for this week',sn)}
-if(!c)return;const d=c.dataset;
-if('t'in d){tab=d.t;render()}else if('m'in d){cm=+d.m?new Date(cm.getFullYear(),cm.getMonth()+ +d.m,1):new Date(today().getFullYear(),today().getMonth(),1);render()}
-else if('sm'in d){spm=+d.sm?new Date(spm.getFullYear(),spm.getMonth()+ +d.sm,1):new Date(today().getFullYear(),today().getMonth(),1);render()}
-else if('occ'in d){const[i,k]=keyOf(d.occ);occDlg(i,k)}
-else if('edit'in d)serDlg(+d.edit,d.from||'')
-else if('day'in d)dayDlg(d.day)
-else if('add'in d)serDlg(0,d.add)
-else if('x'in d)$('#dlg').close()
-else if('tog'in d){const[i,k]=keyOf(d.tog),en=S.e.find(x=>x.id==i);if(!en)return;const on=!(en.ex&&en.ex[k]&&en.ex[k].p);setPaid(en,k,on);save();after()}
-else if('osave'in d){const[i,k]=keyOf(d.osave),en=S.e.find(x=>x.id==i);if(!en)return;const na=+v('oa'),nd=v('od');if(!(na>0)||!nd)return;
-const op=!!(en.ex&&en.ex[k]&&en.ex[k].p),np=$('#op').checked;
-if(op)setPaid(en,k,false);
-const x=exOf(en,k);if(Math.abs(na-en.a)>.004)x.a=na;else delete x.a;if(nd!==k)x.md=nd;else delete x.md;
-if(np)setPaid(en,k,true);tidy(en,k);save();$('#dlg').close();render()}
-else if('skip'in d){const[i,k]=keyOf(d.skip),en=S.e.find(x=>x.id==i);if(!en)return;const sn=snap();
-if(en.r==='o'){S.e=S.e.filter(x=>x.id!=i);toast('Deleted '+en.n,sn)}
-else{const x=exOf(en,k);if(x.p)setPaid(en,k,false);const y=exOf(en,k);y.s=1;delete y.a;delete y.md;toast('Skipped '+en.n+' on '+sd(pd(k)),sn)}
-save();$('#dlg').close();render()}
-else if('save'in d){const id=+d.save;if(!v('fn').trim()||!(+v('fa')>0)||!v('fd'))return;const o={n:v('fn').trim(),a:+v('fa'),t:v('ft'),cat:v('fc').trim(),d:v('fd'),r:v('fr')};
-if(!id)S.e.push({id:S.nid++,...o,...(o.cat?{}:{cat:undefined})});
-else{const en=S.e.find(x=>x.id==id);if(!en)return;const fut=$('#fsc')&&v('fsc')==='fut'&&d.from&&en.r!=='o';if(fut)splitSeries(en,d.from,o);else updSeries(en,o)}
-S.e.forEach(x=>{if(x.cat===undefined)delete x.cat});save();$('#dlg').close();render()}
-else if('del'in d){if(!delArmed){delArmed=true;c.textContent='Tap again to delete';return}const en=S.e.find(x=>x.id==d.del),sn=snap();S.e=S.e.filter(x=>x.id!=d.del);save();$('#dlg').close();render();toast('Deleted '+(en?en.n:'entry'),sn)}
-else if('goal'in d)goalDlg(+d.goal)
-else if('gsave'in d){const k=v('gk'),id=+d.gsave;if(!v('gn').trim())return;let o;
-if(k==='d'){if(!(+v('go')>0))return;o={n:v('gn').trim(),k:'d',o:+v('go'),i:+v('gi')||0,m:+v('gm')||0,t0:+v('g0')||+v('go'),d:v('gd'),p:+v('gp')}}
-else{if(!(+v('gt')>0))return;o={n:v('gn').trim(),k:'s',t:+v('gt'),s:+v('gs')||0,d:v('gd'),p:+v('gp')}}
-if(id){const i=S.g.findIndex(x=>x.id==id);if(i>=0)S.g[i]={id,...o}}else S.g.push({id:S.nid++,...o});save();$('#dlg').close();render()}
-else if('gdel'in d){const g=S.g.find(x=>x.id==d.gdel),sn=snap();S.g=S.g.filter(x=>x.id!=d.gdel);save();$('#dlg').close();render();toast('Deleted '+(g?g.n:'goal'),sn)}
-else if('sset'in d){S.set=Object.assign({},S.set,{payday:+v('sp'),bal:+v('sb')||0,asof:v('sa')||ymd(today()),buf:+v('su')||0});save();$('#dlg').close();render()}
-else if('bal'in d)balDlg()
-else if('bsave'in d){const sn=snap();S.set.bal=r2(+v('bb')||0);S.set.asof=ymd(today());save();$('#dlg').close();render();toast('Balance updated',sn)}
-else if('undo'in d){const tt=$('#toast');if(tt._sn){S=norm(JSON.parse(tt._sn));save();tt.hidden=true;tt._sn=null;render()}}
-else if('dismiss'in d){notice='';render()}
-else if('keep'in d){S.demo=false;save();render()}
-else if('clear'in d){const sn=snap();S.e=[];S.g=[];S.acc={};S.set.bal=0;S.set.buf=0;S.demo=false;save();render();toast('Samples cleared',sn)}
-else if('ack'in d){S.set.ack=ymd(wkStart(today()));save();render()}
-else if('notif'in d){Notification.requestPermission().then(()=>{setDlg();checkNotify()})}
-else if('ics'in d)downloadIcs()
-else if('wipe'in d){if(!wipeArmed){wipeArmed=true;c.textContent='Click again to delete everything';return}doWipe()}
-else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
-else if('export'in d)exportData()
-else if('import'in d)$('#fileIn').click()});
-// Goal type and series scope switch what the pop-up shows
-document.addEventListener('change',e=>{const t=e.target;
-if(t.id==='gk'){$('#gs-s').hidden=t.value==='d';$('#gs-d').hidden=t.value!=='d'}
-if(t.id==='fsc'){$('#fd').value=t.value==='fut'?t.dataset.from:t.dataset.all}});
-function exportData(){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-backup-'+ymd(today())+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The backup file could not be created.';$('#dlg').close();render()}}
-$('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
-r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup imported.'}catch(x){notice='That file is not a Payday Planner backup.'}$('#dlg').close();render()};
-r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
-if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state==='ready'&&S)render()});
-boot();
-</script>
+<div class="w">
+<header>
+<a class="logo" href="index.html?home"><img src="icon-192.png" alt="">Payday Planner</a>
+<nav class="nav" aria-label="Main"><a class="btn ghost" href="auth.html">Sign in</a><a class="btn" href="app.html">Open the app</a></nav>
+</header>
+
+<div class="hero">
+<div>
+<h1>Know what every paycheck has to cover.</h1>
+<p class="lead">Payday Planner works out what this week’s bills need, what to hold back for heavy weeks, and what is truly left for savings and debt, all on a calendar you can read at a glance.</p>
+<div class="cta"><a class="btn" href="app.html">Open the app, no account needed</a><a class="btn ghost" href="auth.html">Create an account</a></div>
+<div class="fine">Free to use. Works on iPhone, Android and computers. Accounts are coming soon; until then your planner is saved privately on your own device.</div>
+</div>
+<div class="shots"><img src="shot-dashboard.png" alt="Dashboard showing the week's balance, bills and what is safe to spend" width="390" height="760"><img src="shot-calendar.png" alt="Month calendar with bills and paychecks marked" width="390" height="760"></div>
+</div>
+
+<section id="features">
+<h2>Built around payday, not the calendar month</h2>
+<div class="cards">
+<div class="card"><h3>Pay-week planning</h3><p>Each paycheck funds the week ahead, from payday to the day before the next one. See bills, what is held, and what is left to spend.</p></div>
+<div class="card"><h3>Heavy weeks handled</h3><p>Rent at the start of the month and car payments at the end? The planner spreads the shortfall across lighter weeks so you are never caught short.</p></div>
+<div class="card"><h3>Goals that work backwards</h3><p>Set a target and a date. It tells you what to set aside each payday, funded after your bills.</p></div>
+<div class="card"><h3>Debt payoff mode</h3><p>Enter what you owe, the interest rate and your minimum. See extra payments and an estimated debt-free date.</p></div>
+<div class="card"><h3>Flexible bills</h3><p>Change one payment, skip it, or update this and future payments. Mark bills paid and your balance follows.</p></div>
+<div class="card"><h3>Reminders and spending</h3><p>Alerts for the week’s bills and for anything due tomorrow, plus a simple spending summary by category.</p></div>
+</div>
+</section>
+
+<section id="how">
+<h2>Up and running in three steps</h2>
+<ol class="steps">
+<li><b>Add your paycheck and bills</b><span>Enter what comes in and what is due, and how often each repeats.</span></li>
+<li><b>See your pay week</b><span>Your dashboard shows what is covered, what to hold, and what is safe to spend.</span></li>
+<li><b>Set a goal</b><span>Save for something or pay down a debt, and follow the plan each payday.</span></li>
+</ol>
+</section>
+
+<section id="install">
+<h2>Put it on your phone</h2>
+<div class="two">
+<div class="card"><h3>iPhone or iPad</h3><ol class="i"><li>Open this site in Safari.</li><li>Tap the Share button.</li><li>Choose <b>Add to Home Screen</b>.</li></ol></div>
+<div class="card"><h3>Android</h3><ol class="i"><li>Open this site in Chrome.</li><li>Open the menu.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li></ol></div>
+</div>
+</section>
+
+<section id="account">
+<h2>Your data stays yours</h2>
+<p class="lead" style="margin-bottom:12px">Right now your planner is saved only in your own browser. Nothing is sent anywhere, and you can export a backup any time from Settings. Accounts are on the way so your planner can follow you between phone and computer.</p>
+<div class="acct"><a class="btn" href="app.html">Open the app</a><a class="btn ghost" href="auth.html">Sign in or create an account</a></div>
+</section>
+
+<footer><span>Payday Planner</span><span>This app is a planning tool, not financial advice.</span></footer>
+</div>
 </body>
 </html>
