@@ -116,6 +116,9 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 .dc{color:var(--debt)}
 .dot.p{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
 .legend{font-size:12px;color:var(--mut);margin:6px 0}
+.pwd{margin-top:12px}
+.pwd>summary{font-size:16px;font-weight:700;cursor:pointer;padding:10px 0;list-style-position:inside}
+.pwd>summary:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
 .pw{margin-top:8px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
 .row2 .row{border:0}
 @media (max-width:700px){.cal-wide{display:none}.cal-mini{display:block}.cal-head .btn{padding:7px 10px}}
@@ -137,6 +140,7 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 <script>
 const DAY=864e5,TABS=['Dashboard','Calendar','Month ahead','Spending','Entries','Goals'];
 const CATS=['Housing','Utilities','Food','Transport','Insurance','Subscriptions','Debt','Health','Fun','Savings','Other'];
+let ppOpen=false;
 let S=null,tab='Dashboard',cm=new Date(),spm=new Date();cm.setDate(1);spm.setDate(1);
 // Account and storage state
 let mode='local',state='loading',status='loading',ref=null,account=null,readonly=false,dirty=false,saving=false,first=false,slow=false,notice='',errMsg='',wipeArmed=false,delArmed=false,qt=0,slowT=0,retried=false,dlgDay=null,tT=0;
@@ -382,8 +386,9 @@ for(let i=0;i<7;i++)h+=`<div class="mh">${addD(s,i).toLocaleDateString(undefined
 for(let d=new Date(s);d<=end;d=addD(d,1)){const k=ymd(d),its=all.filter(x=>ymd(x.d)===k);
 h+=`<button class="mm ${d.getMonth()!==cm.getMonth()?'out':''} ${k===tk?'today':''}" data-day="${k}" type="button" aria-label="${d.toLocaleDateString(undefined,{weekday:'long',month:'long',day:'numeric'})}, ${its.length} item${its.length===1?'':'s'}"><span class="nm">${d.getDate()}</span><span class="dots">${its.slice(0,4).map(x=>`<i class="dot ${x.e.t==='i'?'i':''} ${x.e.gl?'g':''} ${x.p?'p':''}"></i>`).join('')}</span></button>`}
 h+='</div><div class="legend"><span class="inc">●</span> income &nbsp; <span class="exp">●</span> expense &nbsp; <span class="dc">●</span> debt payment &nbsp; ○ paid. Tap a day to see or add entries.</div>';
-h+='<h2 style="margin-top:12px">Pay plan by week</h2>';
+h+=`<details class="pwd" ${ppOpen?'open':''}><summary>Pay plan by week</summary>`;
 for(let d=new Date(s);d<=end;d=addD(d,7))h+=`<div class="pw">${psum(d,W)}</div>`;
+h+='</details>';
 h+=`<h2 style="margin-top:12px">This month</h2><div class="card">`+(mo.map(x=>orow(x)).join('')||'<div class="small">Nothing scheduled this month.</div>')+'</div></div>';
 return h}
 function psum(rs,W){const p=addD(rs,+S.set.payday),w=W.find(x=>ymd(x.a)===ymd(p));
@@ -523,6 +528,7 @@ r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Arra
 r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 try{localStorage.setItem('payday_seen','1')}catch(e){}
+document.addEventListener('toggle',e=>{if(e.target.classList&&e.target.classList.contains('pwd'))ppOpen=e.target.open},true);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state==='ready'&&S)render()});
 boot();
 </script>
