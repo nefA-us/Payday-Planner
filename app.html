@@ -116,6 +116,8 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 .dc{color:var(--debt)}
 .dot.p{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
 .legend{font-size:12px;color:var(--mut);margin:6px 0}
+.sortrow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sortrow select{width:auto;font-size:16px;min-height:40px}
 .pwd{margin-top:12px}
 .pwd>summary{font-size:16px;font-weight:700;cursor:pointer;padding:10px 0;list-style-position:inside}
 .pwd>summary:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
@@ -140,7 +142,7 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 <script>
 const DAY=864e5,TABS=['Dashboard','Calendar','Month ahead','Budgets','Spending','Entries','Goals'];
 const CATS=['Housing','Utilities','Food','Transport','Insurance','Subscriptions','Debt','Health','Fun','Savings','Other'];
-let ppOpen=false;
+let ppOpen=false,esort='due';try{esort=localStorage.getItem('payday_sort')||'due'}catch(e){}
 let S=null,tab='Dashboard',cm=new Date(),spm=new Date();cm.setDate(1);spm.setDate(1);
 // Account and storage state
 let mode='local',state='loading',status='loading',ref=null,account=null,readonly=false,dirty=false,saving=false,first=false,slow=false,notice='',errMsg='',wipeArmed=false,delArmed=false,qt=0,slowT=0,retried=false,dlgDay=null,tT=0;
@@ -207,6 +209,7 @@ const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
 function occ(e,a,b){const o=[],s=pd(e.d);
 if(e.r==='o'){if(s>=a&&s<=b)o.push(s)}
 else if(e.r==='w'||e.r==='b'){const st=e.r==='w'?7:14;let d=new Date(s);if(d<a)d=addD(d,Math.ceil(Math.round((a-d)/DAY)/st)*st);for(;d<=b;d=addD(d,st))o.push(d)}
+else if(e.r==='y'){for(let y=a.getFullYear();y<=b.getFullYear();y++){const last=new Date(y,s.getMonth()+1,0).getDate(),d=new Date(y,s.getMonth(),Math.min(s.getDate(),last));if(d>=s&&d>=a&&d<=b)o.push(d)}}
 else{let c=new Date(a.getFullYear(),a.getMonth(),1);while(c<=b){const last=new Date(c.getFullYear(),c.getMonth()+1,0).getDate(),d=new Date(c.getFullYear(),c.getMonth(),Math.min(s.getDate(),last));if(d>=s&&d>=a&&d<=b)o.push(d);c=new Date(c.getFullYear(),c.getMonth()+1,1)}}
 return e.end?o.filter(d=>ymd(d)<=e.end):o}
 // Real occurrences in [a,b]: applies skips, moved dates, amount changes and paid marks. k is the original pattern date.
@@ -475,8 +478,8 @@ return `<div class="cal-head"><button class="btn ghost" data-sm="-1" aria-label=
 <div class="grid"><div class="card"><div class="lbl">Income</div><div class="big inc">${fmt(ti)}</div></div><div class="card"><div class="lbl">Expenses</div><div class="big exp">${fmt(te)}</div></div><div class="card"><div class="lbl">Left over</div><div class="big">${fmt(ti-te)}</div></div><div class="card"><div class="lbl">Expenses paid so far</div><div class="big">${fmt(pe)}</div><div class="small">${fmt(te-pe)} still to pay</div></div></div>
 <div class="grid" style="margin-top:10px"><div class="card"><h2>Expenses by category</h2>${bars(ce,te,'exp')}</div><div class="card"><h2>Income by category</h2>${bars(ci,ti,'inc')}</div></div>
 <div class="small" style="margin-top:8px">This summary uses the amounts on your calendar, including changes to single payments, plus the spending you log in Budgets. Give each entry a category when you add or edit it.</div>`}
-const RN={o:'One time',w:'Weekly',b:'Every 2 weeks',m:'Monthly'};
-function ents(){return `<div class="cal-head"><h2>Income and expenses</h2><button class="btn" data-add="${ymd(today())}" type="button">Add entry</button></div><div class="card">`+(S.e.length?S.e.map(e=>`<div class="row"><span>${esc(e.n)} <span class="small">${RN[e.r]} from ${sd(pd(e.d))}${e.end?' to '+sd(pd(e.end)):''}${e.cat?' · '+esc(e.cat):''}${e.gl&&S.g.find(q=>q.id==e.gl)?' · pays '+esc(S.g.find(q=>q.id==e.gl).n):''}</span></span><span><b class="${e.t==='i'?'inc':'exp'}">${e.t==='i'?'+':'−'}${fmt(e.a)}</b> <button class="btn ghost sm" data-edit="${e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">No entries yet. Use Add entry to enter a paycheck or a bill.</div>')+'</div>'}
+const RN={o:'One time',w:'Weekly',b:'Every 2 weeks',m:'Monthly',y:'Yearly'};
+function ents(){const nx={};items(today(),addD(today(),400)).forEach(x=>{if(!nx[x.e.id])nx[x.e.id]=x.d});const far=new Date(8.64e15),by=a=>nx[a.id]||far,srt={due:(a,b)=>by(a)-by(b)||a.n.localeCompare(b.n),name:(a,b)=>a.n.localeCompare(b.n),amount:(a,b)=>b.a-a.a||a.n.localeCompare(b.n),cat:(a,b)=>(a.cat||'~').localeCompare(b.cat||'~')||a.n.localeCompare(b.n),type:(a,b)=>b.t.localeCompare(a.t)||a.n.localeCompare(b.n)},list=[...S.e].sort(srt[esort]||srt.due);return `<div class="cal-head"><h2>Income and expenses</h2><button class="btn" data-add="${ymd(today())}" type="button">Add entry</button></div>${S.e.length>1?`<div class="sortrow"><label for="esort" class="small">Sort by</label><select id="esort">${[['due','Next due date'],['name','Name (A to Z)'],['amount','Amount (high to low)'],['cat','Category'],['type','Type (income first)']].map(([k,l])=>`<option value="${k}" ${esort===k?'selected':''}>${l}</option>`).join('')}</select></div>`:''}<div class="card">`+(S.e.length?list.map(e=>`<div class="row"><span>${esc(e.n)} <span class="small">${RN[e.r]} from ${sd(pd(e.d))}${nx[e.id]?' · next '+sd(nx[e.id]):''}${e.end?' to '+sd(pd(e.end)):''}${e.cat?' · '+esc(e.cat):''}${e.gl&&S.g.find(q=>q.id==e.gl)?' · pays '+esc(S.g.find(q=>q.id==e.gl).n):''}</span></span><span><b class="${e.t==='i'?'inc':'exp'}">${e.t==='i'?'+':'−'}${fmt(e.a)}</b> <button class="btn ghost sm" data-edit="${e.id}" type="button">Edit</button></span></div>`).join(''):'<div class="small">No entries yet. Use Add entry to enter a paycheck or a bill.</div>')+'</div>'}
 function goals(){const W=forecast(10),w=W[0],t0=wkStart(today()),dp=debtPlan(W);
 let h=`<div class="cal-head"><h2>Goals</h2><button class="btn" data-goal="0" type="button">Add goal</button></div><div class="small" style="margin-bottom:8px">Goals are funded last, from money left after bills, heavy-week reserves and your safety buffer. For a goal with a date, the planner works backwards from the target and asks for an even amount each payday until then. If a payday falls short, the amount needed on later paydays rises to catch up. Debt payoff goals are extra payments on top of your minimums: they reduce what you owe, they are not counted as savings, and interest is included. With two or more debts, extra money follows your payoff method in Settings.</div>${dp.grp?debtPlanCard(dp,t0):''}<div class="grid">`;
 h+=S.g.length?S.g.map(g=>{const plan=w.gd[g.id]||0,nd=w.nd[g.id]||0,n=w.left[g.id]||1;let info,top;
@@ -603,6 +606,7 @@ r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Arra
 r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 try{localStorage.setItem('payday_seen','1')}catch(e){}
+document.addEventListener('change',e=>{if(e.target.id==='esort'){esort=e.target.value;try{localStorage.setItem('payday_sort',esort)}catch(x){}render()}});
 document.addEventListener('toggle',e=>{if(e.target.classList&&e.target.classList.contains('pwd'))ppOpen=e.target.open},true);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state==='ready'&&S)render()});
 boot();
