@@ -1,98 +1,70 @@
 # Payday Planner
 
-A budgeting calendar that plans each paycheck: what the week's bills need, what to hold back for heavy weeks, and what is left for goals.
+Know where every dollar goes, one pay week at a time.
 
-This is a plain static site. There is no server and no build step, so it runs on any free web host and installs on phones as an app.
+Payday Planner is a free budgeting app that plans your money around your paycheck. Each payday funds the week that follows. The app shows what is due, what is set aside, and what is safe to spend or save.
 
-## What is in this folder
+**Open the app:** https://nefa-us.github.io/Payday-Planner/
 
-| File | What it does |
-|---|---|
-| `index.html` | The landing page new visitors see |
-| `app.html` | The planner itself |
-| `auth.html` | Sign in / create account screen (accounts coming soon) |
-| `shot-*.png` | Screenshots shown on the landing page |
-| `manifest.webmanifest` | Lets phones install it with its own name and icon |
-| `sw.js` | Lets the app open offline after the first visit |
-| `icon-192.png`, `icon-512.png`, `apple-touch-icon.png` | App icons for Android, iPhone and browser tabs |
+## Install it on your phone
 
-## 1. Put it on GitHub
+- **iPhone:** Open the link in Safari, tap the Share button, then tap **Add to Home Screen**.
+- **Android:** Open the link in Chrome, tap the menu (three dots), then tap **Install app** or **Add to Home screen**.
 
-1. Unzip the download.
-2. On github.com choose **New repository**. Name it `payday-planner`, choose **Public**, and create it. (Free accounts can only use GitHub Pages with public repositories.)
-3. On the empty repository page choose **uploading an existing file**.
-4. Drag in everything from inside the unzipped folder, then choose **Commit changes**.
+## How to use it
 
-If you prefer the command line, run this inside the unzipped folder:
+**1. Set up (Settings tab)**
+- Choose your payday (for example, Friday).
+- Enter your current balance and the date it was checked.
+- Optional: set a safety buffer to keep untouched.
 
-```
-git init
-git add .
-git commit -m "Payday Planner"
-git branch -M main
-git remote add origin https://github.com/YOUR-USERNAME/payday-planner.git
-git push -u origin main
-```
+**2. Add your entries (Entries tab)**
+- Tap **Add entry** for each paycheck, bill or subscription.
+- Pick Income or Expense, the amount, the first date, and how often it repeats: One time, Weekly, Every 2 weeks, Monthly or Yearly.
+- Use **Sort by** to order the list by next due date, name, amount, category or type.
 
-## 2. Turn on the website
+**3. Check your week (Dashboard and Calendar)**
+- The Dashboard shows what is due this pay week and what is left over.
+- The Calendar shows every bill and paycheck by day. Tap a day to mark an item paid, skip it, move it, or change its amount for that one time.
+- Open **Pay plan by week** to see future weeks. Heavy weeks are spread out, so a big bill never surprises you.
 
-1. In the repository open **Settings**, then **Pages**.
-2. Under **Build and deployment**, set **Source** to **Deploy from a branch**, pick branch `main` and folder `/ (root)`, and save.
-3. After a minute or two the app is live at `https://YOUR-USERNAME.github.io/payday-planner/`.
+**4. Set goals (Goals tab)**
+- **Savings goals:** set a target and a date. The app sets money aside each week after your bills are covered.
+- **Debt goals:** enter the balance, interest rate and minimum payment. With more than one debt, the app uses the **avalanche** method (highest interest first) by default. You can switch to **snowball** (smallest balance first) in Settings.
+- Link a bill to a debt goal, and marking the bill paid lowers the debt automatically.
 
-## 3. Use your own domain
+**5. Track spending (Budgets tab)**
+- Create any category you like, such as Groceries, and set a monthly amount. The app splits it evenly across your pay periods.
+- Log purchases by hand. On the website you can also add a receipt photo to pull out the total. Photos are never saved.
+- Unspent money rolls into the next period. In Settings, choose whether overspending carries forward (good for weekly pay) or resets (good for monthly pay).
 
-1. Buy a domain from any registrar.
-2. In the repository open **Settings**, then **Pages**. Under **Custom domain** enter your domain (for example `payday.example.com` or `example.com`) and save. GitHub adds a file named `CNAME` to your repository.
-3. At your registrar's DNS settings, add the records below and remove any default records the registrar put there.
+**6. Reminders**
+- Turn on notifications in Settings to get an alert at the start of each pay week and one day before each bill.
+- Alerts appear when the app is open. The calendar download (.ics) can add reminders to your phone's own calendar.
 
-   For a main domain such as `example.com`, add four `A` records on `@`:
+## Your data and backups
 
-   ```
-   185.199.108.153
-   185.199.109.153
-   185.199.110.153
-   185.199.111.153
-   ```
+Your information is saved on your own device. Nothing is sent to a server yet.
+- Use **Export** in Settings to save a backup file, and **Import** to restore it.
+- Export a backup before you delete the app icon or clear your browser data.
+- Phone and computer data are separate until accounts are added.
 
-   For a `www` address, add a `CNAME` record on `www` that points to `YOUR-USERNAME.github.io` (no repository name).
-   Do not add wildcard records such as `*.example.com`.
-4. DNS changes can take up to 24 hours. When the Pages settings show the domain as ready, tick **Enforce HTTPS**. The checkbox can take up to 24 hours to appear.
+## Updating the app
 
-Netlify, Cloudflare Pages and Vercel can also publish straight from this repository and set up HTTPS for you.
+When a new version is uploaded, close and reopen the app twice to load it.
 
-## 4. Install it on a phone
+## For the site owner (GitHub Pages)
 
-- **iPhone or iPad:** open the site in Safari, tap **Share**, then **Add to Home Screen**.
-- **Android:** open the site in Chrome, open the menu, then tap **Install app** (or **Add to Home screen**).
+Files in this folder:
+- `index.html`: landing page
+- `app.html`: the planner
+- `auth.html`: sign-in page (not active until accounts are added)
+- `manifest.webmanifest`, `sw.js`, icons: phone install support
 
-It then opens full screen like an app and works offline after the first visit.
+To update: **Add file → Upload files**, drop in the changed files, then **Commit changes**. The site refreshes in about a minute.
 
-## 5. Where your data lives
+## Coming next
 
-This version has no accounts. Each person's planner is stored in their own browser on their own device and is never sent anywhere. That keeps it private, but it also means:
+Accounts and sync across devices, shared plans for couples, background reminders, a custom domain, and iPhone and Android app store versions.
 
-- A phone and a laptop do not share data.
-- Clearing browser data erases the planner.
-
-Use **Settings, Export backup** to save a file, and **Import backup** to load it on another device. Export a backup now and then.
-
-Fonts load from Google Fonts. Replace them with self-hosted fonts if you do not want that request.
-
-## 6. Next steps
-
-**Accounts and sync across devices.** For people to create their own account and see the same planner on every device, the app needs a small backend. Supabase is a good fit: it provides sign-up, sign-in and a database, and its row-level security rules let each person read and write only their own planner. The app already keeps everything in one document per person, so the change is mostly swapping the load and save functions.
-
-Never put a secret key in this repository. Supabase's public "anon" key is designed to be in the page, but its service key is not.
-
-**iOS and Android store apps.** Capacitor wraps this same web code in native apps:
-
-```
-npm init -y
-npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
-npx cap init "Payday Planner" com.yourname.paydayplanner --web-dir .
-npx cap add ios
-npx cap add android
-```
-
-Building for iPhone needs a Mac with Xcode, building for Android needs Android Studio, and both stores require a paid developer account. Add accounts first, so people's data follows them from the web to the apps.
+Payday Planner is a budgeting tool, not financial advice.
