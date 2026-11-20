@@ -264,20 +264,21 @@ ds.forEach(g=>wk[g.id]=sim.res[g.id]===undefined?null:sim.res[g.id]+1);
 return{grp,ds,order:orderDebts(ds),wk,all:sim.all===null?null:sim.all+1}}
 function debtPlanCard(dp,t0){return `<div class="card" style="margin-bottom:10px"><h2>Debt payoff plan: ${MN[mth()]}</h2><div class="small" style="margin-bottom:6px">${METH[mth()]} Change the method in Settings.</div>`+dp.order.map((g,i)=>`<div class="row"><span>${i+1}. ${esc(g.n)} <span class="small">${g.i?(+g.i)+'% APR · ':''}${fmt(g.o)} owed</span></span><b class="${i?'':'inc'}">${i?'next':'target now'}</b></div>`).join('')+`<div class="small" style="margin-top:6px">${dp.all?'All debts paid around '+sdy(addD(t0,dp.all*7))+' (estimate). ':'At this pace the debts would not be paid off. '}Minimums stay in your bills, and when a debt is paid off its minimum rolls to the next one.</div></div>`}
 // Forecast: budget weeks start on payday; each paycheck funds that week's bills.
+const HW=4; // heavy-week look-ahead: a week only holds money for heavy weeks up to this many weeks later
 function forecast(N){const as=pd(S.set.asof),w0=wkStart(today()),bal=+S.set.bal,buf=+S.set.buf,W=[],BR=budgetReserves(N,w0);
 for(let i=0;i<N;i++){const a=addD(w0,i*7),b=addD(a,6);let inc=0,exp=0,pinc=0,pexp=0;
 items(i===0&&as<a?as:a,b).forEach(x=>{if(x.d<as)return;const m=+x.a;if(x.e.t==='i'){inc+=m;if(x.p)pinc+=m}else{exp+=m;if(x.p)pexp+=m}});
 const ri=inc-pinc,bud=BR[i].t,re=exp-pexp+bud;
 W.push({i,a,b,inc,exp,pinc,pexp,ri,re,bud,buds:BR[i].d,net:ri-re,res:0,R:{},goal:0,gd:{}})}
 W.forEach(w=>w.cap=Math.max(0,w.net));W[0].cap+=Math.max(0,bal-buf);
-for(let j=1;j<N;j++){let s=Math.max(0,W[j].re-W[j].ri),pool=[...Array(j).keys()].filter(i=>W[i].cap>.5);
+for(let j=1;j<N;j++){let s=Math.max(0,W[j].re-W[j].ri),pool=[...Array(j).keys()].filter(i=>j-i<=HW&&W[i].cap>.5);
 for(let it=0;it<8&&s>.5&&pool.length;it++){const sh=s/pool.length;pool.forEach(i=>{const x=Math.min(sh,W[i].cap);W[i].cap-=x;W[i].res+=x;W[i].R[j]=(W[i].R[j]||0)+x;s-=x});pool=pool.filter(i=>W[i].cap>.5)}
 W[j].short=s}
 const D0=S.g.filter(g=>g.k==='d'&&(+g.o||0)>.5),grp=D0.length>=2,DS=[],G=[];
 S.g.forEach(g=>{if(g.k==='d'){const o={id:g.id,k:'d',rem:Math.max(0,+g.o||0),r:(+g.i||0)/5200,mw:(+g.m||0)*12/52,dated:!!g.d,d:g.d,p:g.p,need:0};if(grp&&o.rem>.5)DS.push(o);else G.push(o)}else G.push({id:g.id,k:'s',rem:Math.max(0,g.t-g.s),r:0,mw:0,dated:!!g.d,d:g.d,p:g.p,need:0})});
 // Two or more debts: they share one pool. Extra money goes to one target debt at a time (avalanche or snowball).
 let gg=null;if(grp){gg={id:'D',k:'d',rf:()=>DS.reduce((s,d)=>s+(d.rem>.5?Math.max(0,d.rem*(1+d.r)-d.mw):0),0),dated:DS.some(d=>d.dated),more:true,p:Math.max(...DS.map(d=>d.p)),need:0,rem:0,r:0,mw:0};G.push(gg)}
-let start=bal,saved=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
+let start=bal,saved=0;
 W.forEach((w,i)=>{w.start=start;w.end=start+w.net;start=w.end;
 w.held=0;for(let k=0;k<=i;k++)for(const j in W[k].R)if(+j>i)w.held+=W[k].R[j];
 w.avail=w.end-w.held-saved-buf;
@@ -405,7 +406,7 @@ if(!window.claude){h+='<div class="acts" style="justify-content:flex-start;flex-
 if(window.Notification){const p=Notification.permission;h+=p==='granted'?'<span class="small">Device alerts are on. They show when you open the app.</span>':p==='denied'?'<span class="small">Device alerts are blocked in this browser’s settings.</span>':'<button class="btn ghost" data-notif type="button">Turn on device alerts</button>'}
 h+='<button class="btn ghost" data-ics type="button">Download calendar reminders</button></div><div class="small">Calendar reminders add the next 60 days of bills to your phone’s calendar, with an alert the day before each bill and one at the start of each pay week. Those work even when the app is closed. Download again after big changes.</div>'}
 return h+'</div>'}
-function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY),sv=S.g.filter(g=>g.k!=='d').reduce((s,g)=>s+ +g.s,0);
+function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY);
 const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
 let h='';
 if(!S.e.length)h+=`<div class="card hero"><div class="big">Start with your paycheck</div><div class="lbl">Add the income and bills you expect. The planner then shows what each paycheck covers.</div><div class="acts" style="justify-content:flex-start"><button class="btn" data-add="${ymd(t)}" type="button">Add entry</button></div></div>`;
@@ -423,7 +424,6 @@ h+=`<div class="grid" style="margin-top:10px"><div class="card"><h2>Payday plan<
 <div class="row"><span>+ Income still to come</span><b class="inc">${fmt(w.ri)}</b></div>
 <div class="row"><span>− Bills still due</span><b class="exp">${fmt(w.re-w.bud)}</b></div>${w.bud>.5?`<div class="row"><span>− Set aside for budgets</span><b class="exp">${fmt(w.bud)}</b></div>`:''}
 <div class="row"><span>− Held for heavy weeks</span><b class="res">${fmt(w.held)}</b></div>
-<div class="row"><span>− Already saved to goals</span><b class="goal">${fmt(sv)}</b></div>
 <div class="row"><span>− Safety buffer</span><b>${fmt(S.set.buf)}</b></div>
 <div class="row"><span><b>Free to use</b></span><b>${fmt(Math.max(0,w.avail))}</b></div></div>`;
 const acc=S.acc[ymd(w.a)];
