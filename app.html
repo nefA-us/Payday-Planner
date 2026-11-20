@@ -143,6 +143,8 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 <dialog id="dlg"></dialog>
 <input type="file" id="fileIn" accept="application/json,.json" hidden>
 <div id="toast" class="toast" role="status" hidden></div>
+<script src="sb-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.97.0"></script>
 <script>
 const DAY=864e5,TABS=['Dashboard','Calendar','Month ahead','Budgets','Spending','Entries','Goals'];
 const CATS=['Housing','Utilities','Food','Transport','Insurance','Subscriptions','Debt','Health','Fun','Savings','Other'];
@@ -182,14 +184,14 @@ dirty=true;paint('error');
 if(err.code==='unavailable'&&!retried){retried=true;setTimeout(flush,1500)}}
 const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…','']};
 function paint(s){if(s)status=s;const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
-$('#acct').innerHTML=account&&mode==='cloud'?`<img src="${esc(account.avatarUrl)}" alt=""><span>${esc(account.name||'You')}</span>`:''}
+$('#acct').innerHTML=account&&mode==='cloud'?(account.avatarUrl?`<img src="${esc(account.avatarUrl)}" alt="">`:'')+`<span>${esc(account.name||'You')}</span>`:''}
 // First visit for this account: move the old browser copy if there is one, otherwise start with samples
 async function firstRun(){first=true;let init=null,moved=false;
 try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)){init=norm(o);moved=true}}catch(e){}
 if(!init)init=seed();
 S=init;
 try{await ref.set(clean());state='ready';clearTimeout(slowT);
-if(moved){try{localStorage.removeItem('payday1')}catch(e){}notice='Your planner was moved from this browser to your account. The copy in this browser has been removed.'}
+if(moved){try{localStorage.setItem('payday_local_backup',localStorage.getItem('payday1'));localStorage.removeItem('payday1')}catch(e){}notice='Your planner was moved from this device to your account. A backup copy stays on this device.'}
 paint('saved')}
 catch(err){state='ready';clearTimeout(slowT);if(err&&err.code==='invalid_argument'){readonly=true;paint('readonly')}else{dirty=true;paint('error')}}
 first=false;render()}
@@ -207,7 +209,28 @@ if(user){try{me=await user.me()}catch(e){}}
 if(db&&me&&me.id){mode='cloud';account=me;
 try{ref=db.doc('data/users/'+me.id+'/planner');slowT=setTimeout(()=>{if(state==='loading'){slow=true;render()}},10000);ref.onSnapshot(onSnap,onSnapErr)}
 catch(e){onSnapErr(e)}}
+else if(await sbBoot()){}
 else{mode='local';localLoad();state='ready';paint('local');render()}}
+// Payday Planner accounts (Supabase), website only
+let sb=null,planId=null,sbm=false;
+const sbErr=()=>{const x=new Error('sb');x.code='unavailable';return x};
+async function sbLoad(){const r=await sb.from('plans').select('id,data,updated_at').order('updated_at',{ascending:false}).limit(1);if(r.error)throw r.error;return r.data&&r.data[0]||null}
+function sbRef(){return{set:async d=>{try{if(planId){const r=await sb.from('plans').update({data:d}).eq('id',planId);if(r.error)throw r.error}else{const r=await sb.from('plans').insert({data:d}).select('id').single();if(r.error)throw r.error;planId=r.data.id}}catch(e){throw sbErr()}}}}
+async function sbBoot(){if(!(window.PP_CONFIG&&window.supabase&&window.supabase.createClient))return false;
+let sess=null;
+try{sb=window.supabase.createClient(PP_CONFIG.url,PP_CONFIG.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const g=await sb.auth.getSession();sess=g&&g.data&&g.data.session}catch(e){return false}
+if(!sess)return false;
+mode='cloud';sbm=true;account={name:sess.user.email,email:sess.user.email,avatarUrl:''};ref=sbRef();
+try{const row=await sbLoad();
+if(row){planId=row.id;S=norm(row.data);state='ready';paint('saved');
+try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)&&o.e.length&&!o.demo){localStorage.setItem('payday_local_backup',JSON.stringify(o));localStorage.removeItem('payday1');notice='You are signed in. Your account data is shown. The data that was saved on this device is kept as a backup. Use Settings, Import backup if you want it back.'}}catch(e){}
+render()}
+else await firstRun()}
+catch(e){state='error';errMsg='Your account data could not be reached. Check your connection, then close and reopen the app.';render()}
+return true}
+document.addEventListener('visibilitychange',async()=>{if(document.visibilityState!=='visible'||!sbm||state!=='ready'||dirty||saving)return;
+try{const row=await sbLoad();if(row&&!dirty&&!saving){const d=norm(row.data);if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}}catch(e){}});
 const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
 // Pattern dates of an entry (before any one-off changes), inside [a,b]
 function occ(e,a,b){const o=[],s=pd(e.d);
@@ -302,7 +325,7 @@ return W}
 function toast(m,sn){const t=$('#toast');t.innerHTML=`<span>${esc(m)}</span>`+(sn?'<button class="btn" data-undo type="button">Undo</button>':'');t._sn=sn||null;t.hidden=false;clearTimeout(tT);tT=setTimeout(()=>{t.hidden=true},9000)}
 const snap=()=>JSON.stringify(S);
 function notes(){let h='';
-if(mode==='local')h+=`<div class="note"><span>Your planner is saved only in this browser on this device. Use Settings to export a backup or move it to another device.</span></div>`;
+if(mode==='local')h+=`<div class="note"><span>Your planner is saved only in this browser on this device. Use Settings to export a backup, or <a href="auth.html">sign in or create an account</a> to save it online and use it on other devices.</span></div>`;
 if(readonly)h+=`<div class="note"><span>You have view-only access, so changes are not saved. Ask the person who shared this page for Contributor access.</span></div>`;
 if(notice)h+=`<div class="note"><span>${esc(notice)}</span><span class="acts"><button class="btn ghost" data-dismiss type="button">Dismiss</button></span></div>`;
 if(state==='ready'&&S&&S.demo)h+=`<div class="note"><span>These are sample entries so you can see how the planner works. Replace them with your own.</span><span class="acts"><button class="btn ghost" data-keep type="button">Keep</button><button class="btn" data-clear type="button">Clear samples</button></span></div>`;
@@ -533,7 +556,7 @@ ${fld('Target date (optional)','gd',g.d,'date')}<div class="acts" style="justify
 <div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
 function setDlg(){const s=S.set;wipeArmed=false;
 dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<label>Debt payoff method (for two or more debts)<select id="sdm"><option value="a" ${mth()==='a'?'selected':''}>Avalanche: highest interest first</option><option value="s" ${mth()==='s'?'selected':''}>Snowball: smallest balance first</option></select></label><div class="small"><b>Avalanche</b> sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.<br><b>Snowball</b> sends it to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.</div><label>When you overspend a budget<select id="sov"><option value="carry" ${ovr()==='carry'?'selected':''}>Carry it forward (taken out of later weeks)</option><option value="reset" ${ovr()==='reset'?'selected':''}>Reset to zero each month</option></select></label><div class="small">Paid weekly or every two weeks? Carrying forward keeps the budget honest. Paid once a month? Reset gives you a fresh budget each month. Unspent money always rolls over.</div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
-${notifZone()}<div class="zone"><div class="small">${mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="small" style="margin-top:6px">App version: 20 Nov 2026, build 3</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn ghost" id="bkUpd" type="button">Check for update</button><button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
+${notifZone()}<div class="zone"><div class="small">${sbm?'Signed in as '+esc(account.email)+'. Your planner is saved to your account and only you can see it.':mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="small" style="margin-top:6px">App version: 20 Nov 2026, build 4</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn ghost" id="bkUpd" type="button">Check for update</button>${sbm?'<button class="btn ghost" id="bkOut" type="button">Sign out</button>':'<a class="btn ghost" href="auth.html">Sign in</a>'}<button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
 async function doWipe(){clearTimeout(qt);
 if(mode==='cloud'&&ref){dirty=false;
 try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
@@ -621,6 +644,7 @@ try{await navigator.share({title:'Payday Planner backup',text:txt});bkSay('Done.
 else if(id==='bkCopy'){const txt=JSON.stringify(S);try{await navigator.clipboard.writeText(txt);bkSay('Copied. Paste it into Notes to keep it.')}catch(x){const t=document.createElement('textarea');t.value=txt;t.style.cssText='width:100%;margin-top:8px';e.target.closest('dialog').appendChild(t);t.focus();t.select();bkSay('Select all the text below and copy it.')}}
 else if(id==='bkDl'){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=bkName();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);bkSay('If nothing downloaded, use Share or Copy instead.')}catch(x){bkSay('Download is not available here. Use Share or Copy instead.')}}
 else if(id==='bkFile')$('#fileIn').click();
+else if(id==='bkOut'){e.target.textContent='Signing out…';try{if(dirty)await flush();await sb.auth.signOut()}catch(x){}location.replace('auth.html')}
 else if(id==='bkUpd'){bkSay2(e.target,'Checking…');try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()))}if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(x){}location.replace(location.pathname+'?u='+Date.now())}
 else if(id==='bkRestore')bkRestore(($('#bkText').value||'').trim())});
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();

@@ -25,7 +25,9 @@ input{width:100%;font:inherit;font-size:16px;min-height:44px;padding:8px 10px;bo
 .btn{display:block;width:100%;background:var(--acc);color:var(--accf);border:0;border-radius:8px;padding:12px;font:inherit;font-weight:600;margin-top:18px;cursor:pointer;text-align:center;text-decoration:none}
 .btn.ghost{background:none;color:var(--ink);border:1px solid var(--ln)}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
-.soon{border-left:4px solid var(--res);background:var(--bg);border-radius:0 8px 8px 0;padding:10px 12px;font-size:14px;margin-bottom:6px}
+.msg{border-left:4px solid var(--res);background:var(--bg);border-radius:0 8px 8px 0;padding:10px 12px;font-size:14px;margin-bottom:10px}
+.msg.ok{border-color:var(--goal)}
+.lnk{background:none;border:0;color:var(--goal);font:inherit;font-size:14px;padding:6px 0;cursor:pointer;text-decoration:underline}
 .fine{font-size:13px;color:var(--mut);margin-top:14px;text-align:center}
 a{color:var(--goal)}
 button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
@@ -35,7 +37,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <main>
 <a class="logo" href="index.html?home"><img src="icon-192.png" alt="">Payday Planner</a>
 <div class="card">
-<div class="soon"><b>Accounts are coming soon.</b> You can use the planner right now without one. It saves privately on this device.</div>
+<div id="msg" class="msg" role="alert" hidden></div>
 <div class="tabs" role="tablist"><button id="tIn" class="on" role="tab" aria-selected="true" type="button">Sign in</button><button id="tUp" role="tab" aria-selected="false" type="button">Create account</button></div>
 <h1 id="ttl">Welcome back</h1>
 <form id="f" novalidate>
@@ -43,20 +45,60 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <label>Email<input id="em" type="email" autocomplete="email" inputmode="email"></label>
 <label>Password<input id="pw" type="password" autocomplete="current-password"></label>
 <button class="btn" id="go" type="submit" disabled>Sign in</button>
+<button class="lnk" id="forgot" type="button">Forgot your password?</button>
 </form>
+<form id="rf" novalidate hidden><label>New password (at least 8 characters)<input id="np" type="password" autocomplete="new-password"></label><button class="btn" id="rgo" type="submit">Save new password</button></form>
 <a class="btn ghost" href="app.html">Continue without an account</a>
 <div class="fine"><a href="index.html?home">Back to the home page</a></div>
 </div>
 </main>
+<script src="sb-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.97.0"></script>
 <script>
-var up=false;
-function mode(u){up=u;document.getElementById('tIn').className=u?'':'on';document.getElementById('tUp').className=u?'on':'';
-document.getElementById('tIn').setAttribute('aria-selected',!u);document.getElementById('tUp').setAttribute('aria-selected',u);
-document.getElementById('ttl').textContent=u?'Create your account':'Welcome back';
-document.getElementById('nameL').hidden=!u;document.getElementById('go').textContent=u?'Create account':'Sign in';
-document.getElementById('pw').autocomplete=u?'new-password':'current-password'}
-document.getElementById('tIn').onclick=function(){mode(false)};document.getElementById('tUp').onclick=function(){mode(true)};
-document.getElementById('f').addEventListener('submit',function(e){e.preventDefault()});
+var up=false,$=function(i){return document.getElementById(i)};
+var C=window.PP_CONFIG,sb=null;
+try{if(C&&window.supabase&&window.supabase.createClient)sb=window.supabase.createClient(C.url,C.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}catch(e){}
+var APP=new URL('app.html',location.href).href,HERE=new URL('auth.html',location.href).href;
+function say(t,ok){var m=$('msg');if(!t){m.hidden=true;return}m.textContent=t;m.className='msg'+(ok?' ok':'');m.hidden=false}
+function nice(e){var m=(e&&e.message||'').toLowerCase();
+if(m.indexOf('invalid login')>-1)return 'The email or password is not right.';
+if(m.indexOf('not confirmed')>-1)return 'Please confirm your email first. Check your inbox for the link.';
+if(m.indexOf('already')>-1)return 'An account with this email already exists. Try signing in.';
+if(m.indexOf('password')>-1&&m.indexOf('least')>-1)return 'Please use a longer password (at least 8 characters).';
+if(m.indexOf('rate')>-1||m.indexOf('too many')>-1||(e&&e.status===429))return 'Too many tries. Please wait a few minutes and try again.';
+if(m.indexOf('fetch')>-1||m.indexOf('network')>-1)return 'Could not reach the server. Check your connection and try again.';
+return 'Something went wrong. Please try again.'}
+function mode(u){up=u;$('tIn').className=u?'':'on';$('tUp').className=u?'on':'';
+$('tIn').setAttribute('aria-selected',!u);$('tUp').setAttribute('aria-selected',u);
+$('ttl').textContent=u?'Create your account':'Welcome back';
+$('nameL').hidden=!u;$('go').textContent=u?'Create account':'Sign in';$('forgot').hidden=u;
+$('pw').autocomplete=u?'new-password':'current-password';say('')}
+function ready(){$('go').disabled=!sb||!$('em').value.trim()||!$('pw').value}
+$('tIn').onclick=function(){mode(false)};$('tUp').onclick=function(){mode(true)};
+['em','pw'].forEach(function(i){$(i).addEventListener('input',ready)});
+if(!sb)say('Accounts cannot load right now. You can still use the planner without one.');
+$('f').addEventListener('submit',async function(e){e.preventDefault();if(!sb)return;
+var em=$('em').value.trim(),pw=$('pw').value;
+if(!/^\S+@\S+\.\S+$/.test(em)){say('Please enter a valid email address.');return}
+if(up&&pw.length<8){say('Please use at least 8 characters for your password.');return}
+$('go').disabled=true;say('');
+try{
+if(up){var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:$('nm').value.trim()},emailRedirectTo:APP}});
+if(r.error)throw r.error;
+if(r.data&&r.data.session){location.href=APP;return}
+if(r.data&&r.data.user&&r.data.user.identities&&r.data.user.identities.length===0){say('An account with this email already exists. Try signing in.');$('go').disabled=false;return}
+say('Almost done. We sent a link to '+em+'. Open it to confirm your email, then come back and sign in.',true);$('go').disabled=false}
+else{var r2=await sb.auth.signInWithPassword({email:em,password:pw});if(r2.error)throw r2.error;location.href=APP}
+}catch(err){say(nice(err));$('go').disabled=false}});
+$('forgot').onclick=async function(){if(!sb)return;var em=$('em').value.trim();
+if(!/^\S+@\S+\.\S+$/.test(em)){say('Type your email above first, then tap "Forgot your password?".');return}
+try{var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:HERE});if(r.error)throw r.error;say('If an account exists for '+em+', we sent a link to reset your password.',true)}catch(err){say(nice(err))}};
+function showReset(){$('f').hidden=true;document.querySelector('.tabs').hidden=true;$('rf').hidden=false;$('ttl').textContent='Choose a new password';say('')}
+$('rf').addEventListener('submit',async function(e){e.preventDefault();var p=$('np').value;
+if(p.length<8){say('Please use at least 8 characters.');return}
+try{var r=await sb.auth.updateUser({password:p});if(r.error)throw r.error;say('Password saved. Taking you to the planner…',true);setTimeout(function(){location.href=APP},900)}catch(err){say(nice(err))}});
+if(sb){sb.auth.onAuthStateChange(function(ev){if(ev==='PASSWORD_RECOVERY')showReset()});
+if(!/type=recovery/.test(location.hash)){sb.auth.getSession().then(function(r){if(r&&r.data&&r.data.session)location.replace(APP)})}}
 </script>
 </body>
 </html>
