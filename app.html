@@ -599,13 +599,28 @@ else if('notif'in d){Notification.requestPermission().then(()=>{setDlg();checkNo
 else if('ics'in d)downloadIcs()
 else if('wipe'in d){if(!wipeArmed){wipeArmed=true;c.textContent='Click again to delete everything';return}doWipe()}
 else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
-else if('export'in d)exportData()
-else if('import'in d)$('#fileIn').click()});
+else if('export'in d)backupDlg('export')
+else if('import'in d)backupDlg('import')});
 // Goal type and series scope switch what the pop-up shows
 document.addEventListener('change',e=>{const t=e.target;
 if(t.id==='gk'){$('#gs-s').hidden=t.value==='d';$('#gs-d').hidden=t.value!=='d'}
 if(t.id==='fsc'){$('#fd').value=t.value==='fut'?t.dataset.from:t.dataset.all}});
-function exportData(){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-backup-'+ymd(today())+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The backup file could not be created.';$('#dlg').close();render()}}
+const bkName=()=>'payday-planner-backup-'+ymd(today())+'.json';
+function backupDlg(kind){const txt=JSON.stringify(S);
+dlg(kind==='export'?`<h2>Back up your planner</h2><div class="small">Pick whichever works on your phone. Keep the backup somewhere safe, such as Notes or Files.</div>
+<div class="acts" style="justify-content:flex-start;flex-wrap:wrap;margin-top:10px"><button class="btn" id="bkShare" type="button">Share or save as a file</button><button class="btn ghost" id="bkCopy" type="button">Copy as text</button><button class="btn ghost" id="bkDl" type="button">Download file</button></div><div class="small" id="bkMsg" style="margin-top:8px"></div><div class="acts"><button class="btn ghost" data-x type="button">Close</button></div>`
+:`<h2>Restore a backup</h2><div class="small">This replaces everything in this planner.</div>
+<div class="acts" style="justify-content:flex-start;margin-top:10px"><button class="btn" id="bkFile" type="button">Choose a backup file</button></div>
+<label style="margin-top:10px">Or paste the backup text here<textarea id="bkText" rows="5" placeholder="Paste the backup text"></textarea></label><div class="acts" style="justify-content:flex-start"><button class="btn ghost" id="bkRestore" type="button">Restore from text</button></div><div class="small exp" id="bkMsg" style="margin-top:8px"></div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button></div>`)}
+function bkSay(m){const e=$('#bkMsg');if(e)e.textContent=m}
+function bkRestore(raw){try{const o=JSON.parse(raw);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup restored.';$('#dlg').close();render()}catch(x){bkSay('That is not a Payday Planner backup.')}}
+document.addEventListener('click',async e=>{const id=e.target.id;
+if(id==='bkShare'){const txt=JSON.stringify(S,null,2);try{const f=new File([txt],bkName(),{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:'Payday Planner backup'});bkSay('Done.');return}}catch(x){if(x&&x.name==='AbortError')return}
+try{await navigator.share({title:'Payday Planner backup',text:txt});bkSay('Done.')}catch(x){if(!(x&&x.name==='AbortError'))bkSay('Sharing is not available here. Use Copy as text instead.')}}
+else if(id==='bkCopy'){const txt=JSON.stringify(S);try{await navigator.clipboard.writeText(txt);bkSay('Copied. Paste it into Notes to keep it.')}catch(x){const t=document.createElement('textarea');t.value=txt;t.style.cssText='width:100%;margin-top:8px';e.target.closest('dialog').appendChild(t);t.focus();t.select();bkSay('Select all the text below and copy it.')}}
+else if(id==='bkDl'){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=bkName();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);bkSay('If nothing downloaded, use Share or Copy instead.')}catch(x){bkSay('Download is not available here. Use Share or Copy instead.')}}
+else if(id==='bkFile')$('#fileIn').click();
+else if(id==='bkRestore')bkRestore(($('#bkText').value||'').trim())});
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
 r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup imported.'}catch(x){notice='That file is not a Payday Planner backup.'}$('#dlg').close();render()};
 r.onerror=()=>{notice='That file could not be read.';$('#dlg').close();render()};r.readAsText(f)});
