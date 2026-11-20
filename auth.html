@@ -27,6 +27,11 @@ input{width:100%;font:inherit;font-size:16px;min-height:44px;padding:8px 10px;bo
 .btn[disabled]{opacity:.5;cursor:not-allowed}
 .msg{border-left:4px solid var(--res);background:var(--bg);border-radius:0 8px 8px 0;padding:10px 12px;font-size:14px;margin-bottom:10px}
 .msg.ok{border-color:var(--goal)}
+.hint{font-size:13px;color:var(--mut);margin:8px 0 0;padding:0;list-style:none}
+.hint li{padding:1px 0}
+.hint li.ok{color:var(--goal)}
+.hint li::before{content:'○ '}
+.hint li.ok::before{content:'✓ '}
 .lnk{background:none;border:0;color:var(--goal);font:inherit;font-size:14px;padding:6px 0;cursor:pointer;text-decoration:underline}
 .fine{font-size:13px;color:var(--mut);margin-top:14px;text-align:center}
 a{color:var(--goal)}
@@ -44,10 +49,11 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <label id="nameL" hidden>Name<input id="nm" autocomplete="name"></label>
 <label>Email<input id="em" type="email" autocomplete="email" inputmode="email"></label>
 <label>Password<input id="pw" type="password" autocomplete="current-password"></label>
+<ul class="hint" id="pwh" hidden aria-live="polite"></ul>
 <button class="btn" id="go" type="submit" disabled>Sign in</button>
 <button class="lnk" id="forgot" type="button">Forgot your password?</button>
 </form>
-<form id="rf" novalidate hidden><label>New password (at least 8 characters)<input id="np" type="password" autocomplete="new-password"></label><button class="btn" id="rgo" type="submit">Save new password</button></form>
+<form id="rf" novalidate hidden><label>New password<input id="np" type="password" autocomplete="new-password"></label><ul class="hint" id="nph" aria-live="polite"></ul><button class="btn" id="rgo" type="submit">Save new password</button></form>
 <a class="btn ghost" href="app.html">Continue without an account</a>
 <div class="fine"><a href="index.html?home">Back to the home page</a></div>
 </div>
@@ -59,12 +65,16 @@ var up=false,$=function(i){return document.getElementById(i)};
 var C=window.PP_CONFIG,sb=null;
 try{if(C&&window.supabase&&window.supabase.createClient)sb=window.supabase.createClient(C.url,C.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}catch(e){}
 var APP=new URL('app.html',location.href).href,HERE=new URL('auth.html',location.href).href;
+var RULES=[['At least 8 characters',function(p){return p.length>=8}],['An uppercase letter (A to Z)',function(p){return /[A-Z]/.test(p)}],['A lowercase letter (a to z)',function(p){return /[a-z]/.test(p)}],['A number (0 to 9)',function(p){return /[0-9]/.test(p)}],['A symbol, such as ! - _ @ # $ %',function(p){return /[^A-Za-z0-9\s]/.test(p)}]];
+function drawRules(ul,p){ul.innerHTML=RULES.map(function(r){return '<li class="'+(r[1](p)?'ok':'')+'">'+r[0]+'</li>'}).join('')}
+function missing(p){return RULES.filter(function(r){return !r[1](p)}).map(function(r){return r[0].toLowerCase()})}
+function needMsg(p){var m=missing(p);return m.length?'Your password still needs: '+m.join('; ')+'.':''}
 function say(t,ok){var m=$('msg');if(!t){m.hidden=true;return}m.textContent=t;m.className='msg'+(ok?' ok':'');m.hidden=false}
 function nice(e){var m=(e&&e.message||'').toLowerCase();
 if(m.indexOf('invalid login')>-1)return 'The email or password is not right.';
 if(m.indexOf('not confirmed')>-1)return 'Please confirm your email first. Check your inbox for the link.';
 if(m.indexOf('already')>-1)return 'An account with this email already exists. Try signing in.';
-if(m.indexOf('password')>-1&&m.indexOf('least')>-1)return 'Please use a longer password (at least 8 characters).';
+if(m.indexOf('password')>-1)return (e.message||'That password is not accepted.').replace(/^AuthWeakPasswordError:\s*/i,'');
 if(m.indexOf('rate')>-1||m.indexOf('too many')>-1||(e&&e.status===429))return 'Too many tries. Please wait a few minutes and try again.';
 if(m.indexOf('fetch')>-1||m.indexOf('network')>-1)return 'Could not reach the server. Check your connection and try again.';
 return 'Something went wrong. Please try again.'}
@@ -72,15 +82,17 @@ function mode(u){up=u;$('tIn').className=u?'':'on';$('tUp').className=u?'on':'';
 $('tIn').setAttribute('aria-selected',!u);$('tUp').setAttribute('aria-selected',u);
 $('ttl').textContent=u?'Create your account':'Welcome back';
 $('nameL').hidden=!u;$('go').textContent=u?'Create account':'Sign in';$('forgot').hidden=u;
-$('pw').autocomplete=u?'new-password':'current-password';say('')}
+$('pw').autocomplete=u?'new-password':'current-password';$('pwh').hidden=!u;if(u)drawRules($('pwh'),$('pw').value);say('')}
 function ready(){$('go').disabled=!sb||!$('em').value.trim()||!$('pw').value}
 $('tIn').onclick=function(){mode(false)};$('tUp').onclick=function(){mode(true)};
 ['em','pw'].forEach(function(i){$(i).addEventListener('input',ready)});
+$('pw').addEventListener('input',function(){if(up)drawRules($('pwh'),$('pw').value)});
+$('np').addEventListener('input',function(){drawRules($('nph'),$('np').value)});drawRules($('nph'),'');
 if(!sb)say('Accounts cannot load right now. You can still use the planner without one.');
 $('f').addEventListener('submit',async function(e){e.preventDefault();if(!sb)return;
 var em=$('em').value.trim(),pw=$('pw').value;
 if(!/^\S+@\S+\.\S+$/.test(em)){say('Please enter a valid email address.');return}
-if(up&&pw.length<8){say('Please use at least 8 characters for your password.');return}
+if(up&&needMsg(pw)){say(needMsg(pw));return}
 $('go').disabled=true;say('');
 try{
 if(up){var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:$('nm').value.trim()},emailRedirectTo:APP}});
@@ -95,7 +107,7 @@ if(!/^\S+@\S+\.\S+$/.test(em)){say('Type your email above first, then tap "Forgo
 try{var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:HERE});if(r.error)throw r.error;say('If an account exists for '+em+', we sent a link to reset your password.',true)}catch(err){say(nice(err))}};
 function showReset(){$('f').hidden=true;document.querySelector('.tabs').hidden=true;$('rf').hidden=false;$('ttl').textContent='Choose a new password';say('')}
 $('rf').addEventListener('submit',async function(e){e.preventDefault();var p=$('np').value;
-if(p.length<8){say('Please use at least 8 characters.');return}
+if(needMsg(p)){say(needMsg(p));return}
 try{var r=await sb.auth.updateUser({password:p});if(r.error)throw r.error;say('Password saved. Taking you to the planner…',true);setTimeout(function(){location.href=APP},900)}catch(err){say(nice(err))}});
 if(sb){sb.auth.onAuthStateChange(function(ev){if(ev==='PASSWORD_RECOVERY')showReset()});
 if(!/type=recovery/.test(location.hash)){sb.auth.getSession().then(function(r){if(r&&r.data&&r.data.session)location.replace(APP)})}}
