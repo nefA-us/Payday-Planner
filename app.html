@@ -48,6 +48,10 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .inc{color:var(--inc)}.exp{color:var(--exp)}.goal{color:var(--goal)}.res{color:var(--res)}
 .hero{border-left:5px solid var(--inc);margin-bottom:10px}
 .hero.short{border-color:var(--exp)}
+.fun .big{font-size:2.4rem;line-height:1.1}
+.bt{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.bt>div{flex:1 1 130px;border:1px solid var(--ln);border-radius:10px;padding:8px 10px}
+.bt .bv{font-size:1.4rem;font-weight:700;margin:2px 0 6px}
 .row{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--ln)}
 .row:last-child{border:0}
 .bar{height:8px;background:var(--ln);border-radius:4px;overflow:hidden;margin:6px 0 2px}
@@ -347,7 +351,8 @@ function budCard(t){if(!S.b.length)return '';const wk=wkStart(t);
 return `<div class="card" style="margin-top:10px"><h2>Budgets</h2>`+S.b.map(b=>{const s=bstate(b,wk);return `<div class="row"><span>${esc(b.n)} <span class="small">left this week</span></span><span><b class="${s.left<0?'exp':'inc'}">${fmt(s.left)}</b> <button class="btn ghost sm" data-sp="${b.id}:0" type="button">Add spending</button></span></div>`}).join('')+'</div>'}
 function budgets(){const t=today(),wk=wkStart(t),m0=new Date(t.getFullYear(),t.getMonth(),1),m1=new Date(t.getFullYear(),t.getMonth()+1,0);
 let h=`<div class="cal-head"><h2>Budgets</h2><button class="btn" data-bud="0" type="button">Add budget</button></div><div class="small" style="margin-bottom:8px">Set a monthly amount for anything, such as groceries or gas. It is split evenly across your pay weeks. Log what you spend, and whatever you don't spend rolls into the next week and month. ${ovr()==='reset'?'Overspending resets to zero at the start of each month.':'Overspending is carried forward and comes out of later weeks.'} You can change this in Settings.</div>`;
-if(!S.b.length)return h+'<div class="card"><div class="small">No budgets yet. Add one, for example Groceries at $600 a month.</div></div>';
+const fs=S.sp.filter(p=>!p.b&&pd(p.d)>=m0&&pd(p.d)<=m1).sort((x,y)=>y.d.localeCompare(x.d)),funCard=`<div class="card" style="margin-top:10px"><b>Fun money</b> <span class="small">spending with no budget</span><div class="row"><span>Spent this month</span><b>${fmt(fs.reduce((t,p)=>t+ +p.a,0))}</b></div><div class="acts" style="justify-content:flex-start"><button class="btn" data-sp="0:0" type="button">Add spending</button></div>${fs.slice(0,8).map(p=>`<div class="row"><button class="lk" data-sp="0:${p.id}" type="button">${sd(pd(p.d))}${p.n?' · '+esc(p.n):''}</button><b>${fmt(p.a)}</b></div>`).join('')}</div>`;
+if(!S.b.length)return h+'<div class="card"><div class="small">No budgets yet. Add one, for example Groceries at $600 a month.</div></div>'+funCard;
 h+='<div class="grid">';
 S.b.forEach(b=>{const s=bstate(b,wk),ms=spendIn(b.id,m0,m1),pct=b.m?Math.min(100,ms/b.m*100):0,ps=S.sp.filter(p=>p.b==b.id&&pd(p.d)>=m0&&pd(p.d)<=m1).sort((x,y)=>y.d.localeCompare(x.d)).slice(0,8);
 h+=`<div class="card"><b>${esc(b.n)}</b> <span class="small">${fmt(b.m)} a month</span><div class="lbl" style="margin-top:6px">Left this week</div><div class="big ${s.left<0?'exp':'inc'}">${fmt(s.left)}</div>`
@@ -356,11 +361,11 @@ h+=`<div class="card"><b>${esc(b.n)}</b> <span class="small">${fmt(b.m)} a month
 <div class="bar"><i style="width:${pct}%;background:${ms>b.m?'var(--exp)':'var(--goal)'}"></i></div><div class="small">${fmt(ms)} of ${fmt(b.m)} spent this month</div>
 <div class="acts" style="justify-content:flex-start"><button class="btn" data-sp="${b.id}:0" type="button">Add spending</button><button class="btn ghost" data-bud="${b.id}" type="button">Edit</button></div>`
 +(ps.length?'<div style="margin-top:8px">'+ps.map(p=>`<div class="row"><button class="lk" data-sp="${b.id}:${p.id}" type="button">${sd(pd(p.d))}${p.n?' · '+esc(p.n):''}</button><b>${fmt(p.a)}</b></div>`).join('')+'</div>':'')+'</div>'});
-return h+'</div>'}
+return h+'</div>'+funCard}
 function budDlg(id){const b=S.b.find(x=>x.id==id)||{n:'',m:''};
 dlg(`<h2>${id?'Edit':'Add'} budget</h2>${fld('Name','bn',b.n,'text','placeholder="For example Groceries"')}${fld('Monthly amount','bm',b.m,'number','min="1" step="0.01"')}<div class="small">The monthly amount is split evenly across your pay weeks in each month. Anything you don't spend rolls over.</div><div class="acts">${id?`<button class="btn del" data-buddel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-budsave="${id||0}" type="button">Save</button></div>`)}
 function spDlg(bid,sid){const p=S.sp.find(x=>x.id==sid)||{b:bid,a:'',d:ymd(today()),n:''};
-dlg(`<h2>${sid?'Edit':'Add'} spending</h2>${S.b.length>1?`<label>Budget<select id="spb">${S.b.map(b=>`<option value="${b.id}" ${b.id==p.b?'selected':''}>${esc(b.n)}</option>`).join('')}</select></label>`:`<input type="hidden" id="spb" value="${p.b}">`}${fld('Amount','spa',p.a,'number','min="0.01" step="0.01"')}${fld('Date','spd',p.d,'date')}${fld('Note (optional)','spn',p.n||'','text','placeholder="Store or what you bought"')}
+dlg(`<h2>${sid?'Edit':'Add'} spending</h2>${S.b.length?`<label>Spend from<select id="spb">${S.b.map(b=>`<option value="${b.id}" ${b.id==p.b?'selected':''}>${esc(b.n)} budget</option>`).join('')}<option value="0" ${!p.b?'selected':''}>Fun money (no budget)</option></select></label>`:`<input type="hidden" id="spb" value="0">`}${fld('Amount','spa',p.a,'number','min="0.01" step="0.01"')}${fld('Date','spd',p.d,'date')}${fld('Note (optional)','spn',p.n||'','text','placeholder="Store or what you bought"')}
 <label>Receipt photo (optional)<input id="rcpt" type="file" accept="image/*"></label><img id="rcimg" alt="Receipt photo" hidden style="max-width:100%;max-height:220px;border-radius:8px;margin-top:8px"><div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="btn ghost sm" id="bOcr" data-ocr type="button" hidden>Read the total from the photo</button></div><div class="small" id="rcmsg">Your photo stays on this device and is not saved. Only the amount, date and note are kept.</div>
 <div class="acts">${sid?`<button class="btn del" data-spdel="${sid}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-spsave="${sid||0}" type="button">Save</button></div>`)}
 // Receipt photo: shown beside the form, and (on the website) read on this device with Tesseract.js to suggest the total
@@ -409,6 +414,7 @@ return h+'</div>'}
 function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY);
 const ok=w.status!=='short',msg=w.inc>=w.exp?`Covered with ${fmt(w.inc-w.exp)} to spare`:`Short ${fmt(w.exp-w.inc)} from pay, filled by savings on hand`;
 let h='';
+if(S.e.length){const fun=w.avail-w.goal;h+=`<div class="card hero fun ${fun<0?'short':''}"><div class="lbl">Fun money left</div><div class="big ${fun<0?'exp':'inc'}">${fmt(fun)}</div><div class="lbl">Safe to spend until next payday (${sd(nxt)})</div><div class="acts" style="justify-content:flex-start;margin-top:8px"><button class="btn" data-sp="0:0" type="button">Add spending</button></div>`+(S.b.length?`<div class="bt">${S.b.map(b=>{const q=bstate(b,w.a);return `<div><div class="lbl">${esc(b.n)} left this week</div><div class="bv ${q.left<0?'exp':'inc'}">${fmt(q.left)}</div><button class="btn ghost sm" data-sp="${b.id}:0" type="button">Add spending</button></div>`}).join('')}</div>`:'')+`</div>`}
 if(!S.e.length)h+=`<div class="card hero"><div class="big">Start with your paycheck</div><div class="lbl">Add the income and bills you expect. The planner then shows what each paycheck covers.</div><div class="acts" style="justify-content:flex-start"><button class="btn" data-add="${ymd(t)}" type="button">Add entry</button></div></div>`;
 else if(stale>7)h+=`<div class="alert">Your balance was last updated ${stale} days ago. Update it so the plan matches your bank. <button class="btn sm" data-bal type="button">Update balance</button></div>`;
 const rm=reminders();rm.forEach(r=>{h+=`<div class="alert"><b>${esc(r.title)}</b><div class="small">${esc(r.body)}</div>${r.kind==='w'?'<div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="btn ghost sm" data-ack type="button">Got it</button></div>':''}</div>`});
@@ -417,7 +423,6 @@ h+=`<div class="grid"><div class="card"><div class="lbl">Balance now${stale>0?' 
 <div class="card"><div class="lbl">Bills still due</div><div class="big exp">${fmt(w.re-w.bud)}</div></div>
 <div class="card"><div class="lbl">Hold for heavy weeks</div><div class="big res">${fmt(w.held)}</div></div>
 <div class="card"><div class="lbl">Set aside for goals</div><div class="big goal">${fmt(w.goal)}</div></div>
-<div class="card"><div class="lbl">Safe to spend</div><div class="big inc">${fmt(Math.max(0,w.avail-w.goal))}</div></div>
 <div class="card"><div class="lbl">Projected end of week</div><div class="big">${fmt(w.end)}</div></div></div>`;
 h+=`<div class="grid" style="margin-top:10px"><div class="card"><h2>Payday plan</h2>
 <div class="row"><span>Balance on hand</span><b>${fmt(S.set.bal)}</b></div>
@@ -433,7 +438,7 @@ const al=[];W.forEach((x,i)=>{if(x.status==='short')al.push(`<div class="alert b
 if(i>0&&x.re>x.ri&&x.short<.5)al.push(`<div class="alert">Heavy week starting ${sd(x.a)}: bills and budgets are ${fmt(x.re-x.ri)} above pay.</div>`)});
 if(w.res>0)al.unshift(`<div class="alert">Set aside <b>${fmt(w.res)}</b> from this week’s pay toward upcoming heavy weeks.</div>`);
 const up=items(addD(t,-30),addD(t,14)).filter(x=>x.d>=as&&(x.d>=t||!x.p));
-h+=budCard(t)+debtCard(W,t)+`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Coming up</h2>`+(up.map(x=>orow(x)).join('')||'<div class="small">Nothing due in the next 14 days.</div>')+`</div>`;
+h+=debtCard(W,t)+`<div style="margin-top:10px">${al.join('')}</div><div class="card"><h2>Coming up</h2>`+(up.map(x=>orow(x)).join('')||'<div class="small">Nothing due in the next 14 days.</div>')+`</div>`;
 return h}
 function cal(){const first=new Date(cm),last=new Date(cm.getFullYear(),cm.getMonth()+1,0),s=addD(first,-first.getDay()),end=addD(last,6-last.getDay()),tk=ymd(today()),as=pd(S.set.asof),bal={};
 if((end-as)/DAY<1500){let b=+S.set.bal;const dl={};items(as,end).forEach(x=>{if(x.p)return;const k=ymd(x.d);dl[k]=(dl[k]||0)+(x.e.t==='i'?1:-1)*x.a});for(let d=new Date(as);d<=end;d=addD(d,1)){const k=ymd(d);b+=dl[k]||0;bal[k]=b}}
@@ -473,7 +478,7 @@ return h}
 function bars(o,tot,cls){const k=Object.keys(o).sort((a,b)=>o[b]-o[a]);return k.length?k.map(c=>`<div class="row2"><div class="row"><span>${esc(c)} <span class="small">${tot?Math.round(o[c]/tot*100):0}%</span></span><b class="${cls}">${fmt(o[c])}</b></div><div class="bar"><i style="width:${tot?o[c]/tot*100:0}%;background:var(--${cls})"></i></div></div>`).join(''):'<div class="small">Nothing this month.</div>'}
 function spend(){const a=new Date(spm),b=new Date(spm.getFullYear(),spm.getMonth()+1,0),its=items(a,b);let ti=0,te=0,pe=0;const ce={},ci={};
 its.forEach(x=>{const c=x.e.cat||'Uncategorized',m=+x.a;if(x.e.t==='i'){ti+=m;ci[c]=(ci[c]||0)+m}else{te+=m;ce[c]=(ce[c]||0)+m;if(x.p)pe+=m}});
-S.sp.forEach(q=>{const d=pd(q.d);if(d>=a&&d<=b){const bb=S.b.find(x=>x.id==q.b),c=bb?bb.n:'Budget spending';te+=+q.a;pe+=+q.a;ce[c]=(ce[c]||0)+ +q.a}});
+S.sp.forEach(q=>{const d=pd(q.d);if(d>=a&&d<=b){const bb=S.b.find(x=>x.id==q.b),c=bb?bb.n:(q.b?'Budget spending':'Fun money');te+=+q.a;pe+=+q.a;ce[c]=(ce[c]||0)+ +q.a}});
 return `<div class="cal-head"><button class="btn ghost" data-sm="-1" aria-label="Previous month" type="button">‹</button><button class="btn ghost" data-sm="0" type="button">This month</button><button class="btn ghost" data-sm="1" aria-label="Next month" type="button">›</button><h2>${spm.toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2></div>
 <div class="grid"><div class="card"><div class="lbl">Income</div><div class="big inc">${fmt(ti)}</div></div><div class="card"><div class="lbl">Expenses</div><div class="big exp">${fmt(te)}</div></div><div class="card"><div class="lbl">Left over</div><div class="big">${fmt(ti-te)}</div></div><div class="card"><div class="lbl">Expenses paid so far</div><div class="big">${fmt(pe)}</div><div class="small">${fmt(te-pe)} still to pay</div></div></div>
 <div class="grid" style="margin-top:10px"><div class="card"><h2>Expenses by category</h2>${bars(ce,te,'exp')}</div><div class="card"><h2>Income by category</h2>${bars(ci,ti,'inc')}</div></div>
