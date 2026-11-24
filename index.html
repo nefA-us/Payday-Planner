@@ -22,7 +22,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 // Installed copies and returning visitors go straight to the planner (it asks them to sign in if needed). Add ?home to see this page anyway.
-try{var sa=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone,has=localStorage.getItem('payday_seen');if((sa||has)&&location.search.indexOf('home')<0)location.replace('app.html')}catch(e){}
+try{if(/type=recovery|access_token=|error_description=/.test(location.hash)){location.replace('auth.html'+location.hash);throw 0}var sa=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone,has=localStorage.getItem('payday_seen');if((sa||has)&&location.search.indexOf('home')<0)location.replace('app.html')}catch(e){}
 </script>
 <style>
 :root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--acc:#14231e;--accf:#fff;--tint:#e6efe9}

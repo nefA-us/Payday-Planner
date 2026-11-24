@@ -54,7 +54,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <div class="fine" id="consent" hidden>By creating an account you agree to the <a href="terms.html">Terms of Service</a> and the <a href="privacy.html">Privacy Policy</a>.</div>
 <button class="lnk" id="forgot" type="button">Forgot your password?</button>
 </form>
-<form id="rf" novalidate hidden><label>New password<input id="np" type="password" autocomplete="new-password"></label><ul class="hint" id="nph" aria-live="polite"></ul><button class="btn" id="rgo" type="submit">Save new password</button></form>
+<form id="rf" novalidate hidden><label>New password<input id="np" type="password" autocomplete="new-password"></label><ul class="hint" id="nph" aria-live="polite"></ul><button class="btn" id="rgo" type="submit">Save new password</button><p class="fine" id="back" hidden><a href="auth.html">Back to sign in</a></p></form>
 <div class="fine"><a href="index.html?home">Back to the home page</a></div>
 </div>
 </main>
@@ -67,7 +67,7 @@ try{if(C&&window.supabase&&window.supabase.createClient)sb=window.supabase.creat
 var APP=new URL('app.html',location.href).href,HERE=new URL('auth.html',location.href).href;
 var RULES=[['At least 8 characters',function(p){return p.length>=8}],['An uppercase letter (A to Z)',function(p){return /[A-Z]/.test(p)}],['A lowercase letter (a to z)',function(p){return /[a-z]/.test(p)}],['A number (0 to 9)',function(p){return /[0-9]/.test(p)}],['A symbol, such as ! - _ @ # $ %',function(p){return /[^A-Za-z0-9\s]/.test(p)}]];
 function drawRules(ul,p){ul.innerHTML=RULES.map(function(r){return '<li class="'+(r[1](p)?'ok':'')+'">'+r[0]+'</li>'}).join('')}
-function missing(p){return RULES.filter(function(r){return !r[1](p)}).map(function(r){return r[0].toLowerCase()})}
+function missing(p){return RULES.filter(function(r){return !r[1](p)}).map(function(r){return r[0].charAt(0).toLowerCase()+r[0].slice(1)})}
 function needMsg(p){var m=missing(p);return m.length?'Your password still needs: '+m.join('; ')+'.':''}
 function say(t,ok){var m=$('msg');if(!t){m.hidden=true;return}m.textContent=t;m.className='msg'+(ok?' ok':'');m.hidden=false}
 function nice(e){var m=(e&&e.message||'').toLowerCase();
@@ -106,11 +106,18 @@ else{var r2=await sb.auth.signInWithPassword({email:em,password:pw});if(r2.error
 $('forgot').onclick=async function(){if(!sb)return;var em=$('em').value.trim();
 if(!/^\S+@\S+\.\S+$/.test(em)){say('Type your email above first, then tap "Forgot your password?".');return}
 try{var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:HERE});if(r.error)throw r.error;say('If an account exists for '+em+', we sent a link to reset your password.',true)}catch(err){say(nice(err))}};
-function showReset(){$('f').hidden=true;document.querySelector('.tabs').hidden=true;$('rf').hidden=false;$('ttl').textContent='Choose a new password';say('')}
+var resetMode=false;
+function showReset(){if(resetMode)return;resetMode=true;$('f').hidden=true;document.querySelector('.tabs').hidden=true;$('rf').hidden=false;$('ttl').textContent='Choose a new password';say('');setTimeout(function(){try{$('np').focus()}catch(e){}},50)}
+function hashErr(){var h=location.hash.replace(/^#/,''),m=/error_description=([^&]*)/.exec(h);return m?decodeURIComponent(m[1].replace(/\+/g,' ')):(/(^|&)error=/.test(h)?'error':'')}
+async function haveSession(){for(var i=0;i<8;i++){try{var r=await sb.auth.getSession();if(r&&r.data&&r.data.session)return true}catch(e){}await new Promise(function(ok){setTimeout(ok,400)})}return false}
 $('rf').addEventListener('submit',async function(e){e.preventDefault();var p=$('np').value;
 if(needMsg(p)){say(needMsg(p));return}
-try{var r=await sb.auth.updateUser({password:p});if(r.error)throw r.error;say('Password saved. Taking you to the planner…',true);setTimeout(function(){location.href=APP},900)}catch(err){say(nice(err))}});
+$('rgo').disabled=true;
+if(!(await haveSession())){say('This reset link has expired or was already used. Go back to Sign in, type your email, and tap Forgot your password for a new link.');$('rgo').disabled=false;$('back').hidden=false;return}
+try{var r=await sb.auth.updateUser({password:p});if(r.error)throw r.error;say('Password saved. Taking you to the planner…',true);setTimeout(function(){location.href=APP},900)}catch(err){say(nice(err));$('rgo').disabled=false}});
 if(sb){sb.auth.onAuthStateChange(function(ev){if(ev==='PASSWORD_RECOVERY')showReset()});
+if(/type=recovery/.test(location.hash))showReset();
+else if(hashErr()){say('That link has expired or was already used. Type your email above and tap Forgot your password for a new one.')}
 if(!/type=recovery/.test(location.hash)){sb.auth.getSession().then(function(r){if(r&&r.data&&r.data.session)location.replace(APP)})}}
 </script>
 </body>
