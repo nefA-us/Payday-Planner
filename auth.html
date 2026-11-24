@@ -50,6 +50,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <label>Email<input id="em" type="email" autocomplete="email" inputmode="email"></label>
 <label>Password<input id="pw" type="password" autocomplete="current-password"></label>
 <ul class="hint" id="pwh" hidden aria-live="polite"></ul>
+<div id="cap" style="margin:8px 0"></div>
 <button class="btn" id="go" type="submit" disabled>Sign in</button>
 <div class="fine" id="consent" hidden>By creating an account you agree to the <a href="terms.html">Terms of Service</a> and the <a href="privacy.html">Privacy Policy</a>.</div>
 <button class="lnk" id="forgot" type="button">Forgot your password?</button>
@@ -64,6 +65,11 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 var up=false,$=function(i){return document.getElementById(i)};
 var C=window.PP_CONFIG,sb=null;
 try{if(C&&window.supabase&&window.supabase.createClient)sb=window.supabase.createClient(C.url,C.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})}catch(e){}
+var TSK=C&&C.turnstile,capTok='',capId=null;
+function capInit(){if(!TSK||!$('cap'))return;var s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.async=true;s.onload=function(){try{capId=turnstile.render('#cap',{sitekey:TSK,callback:function(t){capTok=t},'expired-callback':function(){capTok=''},'error-callback':function(){capTok=''}})}catch(e){}};document.head.appendChild(s)}
+function capUse(){var t=capTok;capTok='';try{if(capId!==null)turnstile.reset(capId)}catch(e){}return t}
+function capNeed(){if(TSK&&!capTok){say('One moment. We are checking that you are a real person. Try again in a few seconds.');return true}return false}
+capInit();
 var APP=new URL('app.html',location.href).href,HERE=new URL('auth.html',location.href).href;
 var RULES=[['At least 8 characters',function(p){return p.length>=8}],['An uppercase letter (A to Z)',function(p){return /[A-Z]/.test(p)}],['A lowercase letter (a to z)',function(p){return /[a-z]/.test(p)}],['A number (0 to 9)',function(p){return /[0-9]/.test(p)}],['A symbol, such as ! - _ @ # $ %',function(p){return /[^A-Za-z0-9\s]/.test(p)}]];
 function drawRules(ul,p){ul.innerHTML=RULES.map(function(r){return '<li class="'+(r[1](p)?'ok':'')+'">'+r[0]+'</li>'}).join('')}
@@ -71,6 +77,7 @@ function missing(p){return RULES.filter(function(r){return !r[1](p)}).map(functi
 function needMsg(p){var m=missing(p);return m.length?'Your password still needs: '+m.join('; ')+'.':''}
 function say(t,ok){var m=$('msg');if(!t){m.hidden=true;return}m.textContent=t;m.className='msg'+(ok?' ok':'');m.hidden=false}
 function nice(e){var m=(e&&e.message||'').toLowerCase();
+if(m.indexOf('captcha')>-1)return 'The person check did not pass. Wait a few seconds and try again.';
 if(m.indexOf('invalid login')>-1)return 'The email or password is not right.';
 if(m.indexOf('not confirmed')>-1)return 'Please confirm your email first. Check your inbox for the link.';
 if(m.indexOf('already')>-1)return 'An account with this email already exists. Try signing in.';
@@ -94,18 +101,21 @@ $('f').addEventListener('submit',async function(e){e.preventDefault();if(!sb)ret
 var em=$('em').value.trim(),pw=$('pw').value;
 if(!/^\S+@\S+\.\S+$/.test(em)){say('Please enter a valid email address.');return}
 if(up&&needMsg(pw)){say(needMsg(pw));return}
+if(capNeed())return;
+var tok=capUse()||undefined;
 $('go').disabled=true;say('');
 try{
-if(up){var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:$('nm').value.trim()},emailRedirectTo:APP}});
+if(up){var r=await sb.auth.signUp({email:em,password:pw,options:{data:{name:$('nm').value.trim()},emailRedirectTo:APP,captchaToken:tok}});
 if(r.error)throw r.error;
 if(r.data&&r.data.session){location.href=APP;return}
 if(r.data&&r.data.user&&r.data.user.identities&&r.data.user.identities.length===0){say('An account with this email already exists. Try signing in.');$('go').disabled=false;return}
 say('Almost done. We sent a link to '+em+'. Open it to confirm your email, then come back and sign in.',true);$('go').disabled=false}
-else{var r2=await sb.auth.signInWithPassword({email:em,password:pw});if(r2.error)throw r2.error;location.href=APP}
+else{var r2=await sb.auth.signInWithPassword({email:em,password:pw,options:{captchaToken:tok}});if(r2.error)throw r2.error;location.href=APP}
 }catch(err){say(nice(err));$('go').disabled=false}});
 $('forgot').onclick=async function(){if(!sb)return;var em=$('em').value.trim();
 if(!/^\S+@\S+\.\S+$/.test(em)){say('Type your email above first, then tap "Forgot your password?".');return}
-try{var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:HERE});if(r.error)throw r.error;say('If an account exists for '+em+', we sent a link to reset your password.',true)}catch(err){say(nice(err))}};
+if(capNeed())return;var tk=capUse()||undefined;
+try{var r=await sb.auth.resetPasswordForEmail(em,{redirectTo:HERE,captchaToken:tk});if(r.error)throw r.error;say('If an account exists for '+em+', we sent a link to reset your password.',true)}catch(err){say(nice(err))}};
 var resetMode=false;
 function showReset(){if(resetMode)return;resetMode=true;$('f').hidden=true;document.querySelector('.tabs').hidden=true;$('rf').hidden=false;$('ttl').textContent='Choose a new password';say('');setTimeout(function(){try{$('np').focus()}catch(e){}},50)}
 function hashErr(){var h=location.hash.replace(/^#/,''),m=/error_description=([^&]*)/.exec(h);return m?decodeURIComponent(m[1].replace(/\+/g,' ')):(/(^|&)error=/.test(h)?'error':'')}

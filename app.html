@@ -616,7 +616,11 @@ dlg(`<h2>Settings</h2>
 <details class="sec"><summary>Help and about</summary><div class="acts"><a class="btn ghost" href="mailto:hello@mypayplanner.com?subject=Payday%20Planner%20feedback">Send feedback</a><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a><a class="btn ghost" href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>${sbm?`<label class="chk"><input id="noerr" type="checkbox" ${noerr?'':'checked'}> Send error reports to help fix problems</label><div class="small">Reports contain the error message, the page, the app version and your browser type. They never contain your entries.</div>`:''}<div class="small">App version: ${APPV}</div><div class="acts"><button class="btn ghost" id="bkUpd" type="button">Check for update</button></div></details>`)}
 // Change password: confirm the current one, then set a new one that meets the rules
 const PWR=[['At least 8 characters',p=>p.length>=8],['An uppercase letter (A to Z)',p=>/[A-Z]/.test(p)],['A lowercase letter (a to z)',p=>/[a-z]/.test(p)],['A number (0 to 9)',p=>/[0-9]/.test(p)],['A symbol, such as ! - _ @ # $ %',p=>/[^A-Za-z0-9]/.test(p)]];
-function pwDlg(){dlg(`<h2>Change password</h2><label>Current password<input id="pwCur" type="password" autocomplete="current-password"></label><label>New password<input id="pwNew" type="password" autocomplete="new-password"></label><ul class="rules" id="pwRules" aria-live="polite"></ul><div class="small exp" id="bkMsg" role="alert"></div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" id="pwGo" type="button">Change password</button></div>`);pwRules()}
+let pwTok='',pwCapId=null;
+function pwCapInit(){const k=window.PP_CONFIG&&PP_CONFIG.turnstile;pwTok='';pwCapId=null;if(!k||!$('#pwCap'))return;
+const go=()=>{try{pwCapId=turnstile.render('#pwCap',{sitekey:k,callback:t=>{pwTok=t},'expired-callback':()=>{pwTok=''},'error-callback':()=>{pwTok=''}})}catch(e){}};
+if(window.turnstile)go();else{const s=document.createElement('script');s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';s.async=true;s.onload=go;document.head.appendChild(s)}}
+function pwDlg(){dlg(`<h2>Change password</h2><label>Current password<input id="pwCur" type="password" autocomplete="current-password"></label><label>New password<input id="pwNew" type="password" autocomplete="new-password"></label><ul class="rules" id="pwRules" aria-live="polite"></ul><div id="pwCap"></div><div class="small exp" id="bkMsg" role="alert"></div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" id="pwGo" type="button">Change password</button></div>`);pwRules();pwCapInit()}
 function pwRules(){const p=($('#pwNew')||{}).value||'';const u=$('#pwRules');if(u)u.innerHTML=PWR.map(r=>`<li class="${r[1](p)?'ok':''}">${r[0]}</li>`).join('')}
 async function pwSave(btn){const cur=$('#pwCur').value,nw=$('#pwNew').value;
 if(!navigator.onLine)return bkSay('You need an internet connection to change your password.');
@@ -624,8 +628,10 @@ if(!cur)return bkSay('Type your current password.');
 const miss=PWR.filter(r=>!r[1](nw)).map(r=>r[0].charAt(0).toLowerCase()+r[0].slice(1));
 if(miss.length)return bkSay('Your new password still needs: '+miss.join('; ')+'.');
 if(nw===cur)return bkSay('Choose a new password that is different from your current one.');
+const ck=window.PP_CONFIG&&PP_CONFIG.turnstile;if(ck&&!pwTok)return bkSay('One moment. We are checking that you are a real person. Try again in a few seconds.');
+const tok=pwTok||undefined;pwTok='';try{if(pwCapId!==null)turnstile.reset(pwCapId)}catch(e){}
 btn.disabled=true;btn.textContent='Saving…';bkSay('');
-try{const a=await sb.auth.signInWithPassword({email:account.email,password:cur});if(a.error){bkSay('Your current password is not right.');return}
+try{const a=await sb.auth.signInWithPassword({email:account.email,password:cur,options:{captchaToken:tok}});if(a.error){bkSay(/captcha/i.test(a.error.message||'')?'The person check did not pass. Wait a few seconds and try again.':'Your current password is not right.');return}
 const r=await sb.auth.updateUser({password:nw});if(r.error){bkSay(/different|same/i.test(r.error.message||'')?'Choose a password you have not used before.':(r.error.message||'The password could not be changed.'));return}
 $('#dlg').close();toast('Password changed')}
 catch(x){bkSay('The password could not be changed. Check your connection and try again.')}
