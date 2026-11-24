@@ -175,12 +175,13 @@ function localSave(){try{localStorage.setItem('payday1',JSON.stringify(S))}catch
 // Saving: cloud documents are written one at a time, after a short pause
 function save(){if(mode==='cloud'){if(readonly)return;dirty=true;queue()}else localSave()}
 function queue(){clearTimeout(qt);qt=setTimeout(flush,300);paint('saving')}
-async function flush(){if(!ref||saving||!dirty||state!=='ready')return;saving=true;dirty=false;paint('saving');let err=null;
+async function flush(){if(!ref||saving||!dirty||state!=='ready'||conflictRow)return;saving=true;dirty=false;paint('saving');let err=null;
 try{await ref.set(clean())}catch(e){err=e||{}}
 saving=false;
 if(!err){retried=false;if(dirty)queue();else paint('saved');return}
 if(err.code==='invalid_argument'){readonly=true;paint('readonly');render();return}
 dirty=true;paint('error');
+if(err.code==='conflict'){conflictRow=err.row;conflictDlg();return}
 if(err.code==='unavailable'&&!retried){retried=true;setTimeout(flush,1500)}}
 const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…','']};
 function paint(s){if(s)status=s;const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
@@ -213,10 +214,15 @@ else{const r=await sbBoot();
 if(r==='noauth'){location.replace('auth.html');return}
 if(r!==true){state='error';errMsg='Sign-in could not load. Check your connection, then reload this page.';paint('error');render()}}}
 // Payday Planner accounts (Supabase), website only
-let sb=null,planId=null,sbm=false;
+let sb=null,planId=null,planAt=null,sbm=false,conflictRow=null;
 const sbErr=()=>{const x=new Error('sb');x.code='unavailable';return x};
 async function sbLoad(){const r=await sb.from('plans').select('id,data,updated_at').order('updated_at',{ascending:false}).limit(1);if(r.error)throw r.error;return r.data&&r.data[0]||null}
-function sbRef(){return{set:async d=>{try{if(planId){const r=await sb.from('plans').update({data:d}).eq('id',planId);if(r.error)throw r.error}else{const r=await sb.from('plans').insert({data:d}).select('id').single();if(r.error)throw r.error;planId=r.data.id}}catch(e){throw sbErr()}}}}
+// Saving checks that nobody else saved since we last loaded (updated_at). If someone did, nothing is overwritten and the person chooses which version to keep.
+function sbRef(){return{set:async d=>{try{if(planId){const r=await sb.from('plans').update({data:d}).eq('id',planId).eq('updated_at',planAt).select('updated_at');if(r.error)throw r.error;
+if(!r.data||!r.data.length){const cur=await sbLoad();if(cur&&cur.updated_at!==planAt){const x=new Error('conflict');x.code='conflict';x.row=cur;throw x}throw new Error('not saved')}
+planAt=r.data[0].updated_at}
+else{const r=await sb.from('plans').insert({data:d}).select('id,updated_at').single();if(r.error)throw r.error;planId=r.data.id;planAt=r.data.updated_at}}catch(e){if(e&&e.code==='conflict')throw e;throw sbErr()}}}}
+function conflictDlg(){dlg(`<h2>Changed on another device</h2><div class="small">This planner was saved from another phone or computer after you opened it. Nothing was overwritten. Choose which version to keep.</div><div class="acts"><button class="btn" data-cuse type="button">Use the newer version</button><button class="btn del" data-ckeep type="button">Keep what I have here</button></div><div class="small">The newer version replaces what you see now, including the change you just made. Keeping this one replaces the changes made on the other device.</div>`)}
 var RECOV=/type=recovery/.test(location.hash);if(RECOV)location.replace('auth.html'+location.hash);
 async function sbBoot(){if(!(window.PP_CONFIG&&window.supabase&&window.supabase.createClient))return 'nolib';
 let sess=null;
@@ -225,14 +231,14 @@ const g=await sb.auth.getSession();sess=g&&g.data&&g.data.session}catch(e){retur
 if(!sess)return 'noauth';
 mode='cloud';sbm=true;account={name:sess.user.email,email:sess.user.email,avatarUrl:''};ref=sbRef();
 try{const row=await sbLoad();
-if(row){planId=row.id;S=norm(row.data);state='ready';paint('saved');
+if(row){planId=row.id;planAt=row.updated_at;S=norm(row.data);state='ready';paint('saved');
 try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)&&o.e.length&&!o.demo){localStorage.setItem('payday_local_backup',JSON.stringify(o));localStorage.removeItem('payday1');notice='You are signed in. Your account data is shown. The data that was saved on this device is kept as a backup. Use Settings, Import backup if you want it back.'}}catch(e){}
 render()}
 else await firstRun()}
 catch(e){state='error';errMsg='Your account data could not be reached. Check your connection, then close and reopen the app.';render()}
 return true}
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState!=='visible'||!sbm||state!=='ready'||dirty||saving)return;
-try{const row=await sbLoad();if(row&&!dirty&&!saving){const d=norm(row.data);if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}}catch(e){}});
+try{const row=await sbLoad();if(row&&!dirty&&!saving&&!conflictRow){const d=norm(row.data);planAt=row.updated_at;if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}}catch(e){}});
 const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
 // Pattern dates of an entry (before any one-off changes), inside [a,b]
 function occ(e,a,b){const o=[],s=pd(e.d);
@@ -564,7 +570,7 @@ ${fld('Target date (optional)','gd',g.d,'date')}<div class="acts" style="justify
 <div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
 function setDlg(){const s=S.set;wipeArmed=false;
 dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<label>Debt payoff method (for two or more debts)<select id="sdm"><option value="a" ${mth()==='a'?'selected':''}>Avalanche: highest interest first</option><option value="s" ${mth()==='s'?'selected':''}>Snowball: smallest balance first</option></select></label><div class="small"><b>Avalanche</b> sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.<br><b>Snowball</b> sends it to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.</div>${fld('Share of spare money sent to debt (%)','sdp',S.set.dpct==null?100:S.set.dpct,'number','min="0" max="100" step="5"')}<div class="small">Each week, after bills and reserves, this share of what is left goes to extra debt payments. The rest stays as Left over for you. 100 means all of it. A debt with a target date still gets what it needs to finish on time. Minimum payments stay in your bills.</div><label>When you overspend a budget<select id="sov"><option value="carry" ${ovr()==='carry'?'selected':''}>Carry it forward (taken out of later weeks)</option><option value="reset" ${ovr()==='reset'?'selected':''}>Reset to zero each month</option></select></label><div class="small">Paid weekly or every two weeks? Carrying forward keeps the budget honest. Paid once a month? Reset gives you a fresh budget each month. Unspent money always rolls over.</div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
-${notifZone()}<div class="zone"><div class="small">${sbm?'Signed in as '+esc(account.email)+'. Your planner is saved to your account and only you can see it.':mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="small" style="margin-top:6px">App version: 24 Nov 2026, build 8</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn ghost" id="bkUpd" type="button">Check for update</button>${sbm?'<button class="btn ghost" id="bkOut" type="button">Sign out</button><button class="btn del" id="bkDel" type="button">Delete my account</button>':''}<button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
+${notifZone()}<div class="zone"><div class="small">${sbm?'Signed in as '+esc(account.email)+'. Your planner is saved to your account and only you can see it.':mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="small" style="margin-top:6px">App version: 24 Nov 2026, build 9</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn ghost" id="bkUpd" type="button">Check for update</button>${sbm?'<button class="btn ghost" id="bkOut" type="button">Sign out</button><button class="btn del" id="bkDel" type="button">Delete my account</button>':''}<button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
 async function doWipe(){clearTimeout(qt);
 if(mode==='cloud'&&ref){dirty=false;
 try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
@@ -573,8 +579,8 @@ else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
 $('#dlg').close();render()}
 const v=id=>$('#'+id).value;
 function after(){const d=$('#dlg');if(d.open&&dlgDay)dayDlg(dlgDay);render()}
-document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
-if(t.id==='stat'){if(status==='error'){dirty=true;retried=false;flush()}return}
+document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-cuse],[data-ckeep],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
+if(t.id==='stat'){if(conflictRow){conflictDlg();return}if(status==='error'){dirty=true;retried=false;flush()}return}
 if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
 if(t.id==='bAcc'){const w=forecast(1)[0],sn=snap();S.g.forEach(g=>{const x=w.gd[g.id]||0;if(!x)return;if(g.k==='d'){g.o=r2(Math.max(0,+g.o-x));S.set.bal=r2(+S.set.bal-x)}else g.s=r2(+g.s+x)});S.acc[ymd(w.a)]=1;save();render();return toast('Plan accepted for this week',sn)}
 if(!c)return;const d=c.dataset;
@@ -595,6 +601,8 @@ else if('skip'in d){const[i,k]=keyOf(d.skip),en=S.e.find(x=>x.id==i);if(!en)retu
 if(en.r==='o'){S.e=S.e.filter(x=>x.id!=i);toast('Deleted '+en.n,sn)}
 else{const x=exOf(en,k);if(x.p)setPaid(en,k,false);const y=exOf(en,k);y.s=1;delete y.a;delete y.md;toast('Skipped '+en.n+' on '+sd(pd(k)),sn)}
 save();$('#dlg').close();render()}
+else if('cuse'in d){if(!conflictRow)return;S=norm(conflictRow.data);planAt=conflictRow.updated_at;conflictRow=null;dirty=false;$('#dlg').close();paint('saved');render();toast('Loaded the newer version')}
+else if('ckeep'in d){if(!conflictRow)return;planAt=conflictRow.updated_at;conflictRow=null;dirty=true;$('#dlg').close();flush()}
 else if('unskip'in d){const[i,k]=keyOf(d.unskip),en=S.e.find(x=>x.id==i);if(!en||!en.ex||!en.ex[k])return;const sn=snap();delete en.ex[k].s;tidy(en,k);save();render();toast('Restored '+en.n+' on '+sd(pd(k)),sn)}
 else if('save'in d){const id=+d.save;if(!v('fn').trim()||!(+v('fa')>0)||!v('fd'))return;const o={n:v('fn').trim(),a:+v('fa'),t:v('ft'),cat:v('fc').trim(),d:v('fd'),r:v('fr'),gl:$('#fg')?+v('fg')||0:0};if(o.gl&&!o.cat)o.cat='Debt';
 if(!id)S.e.push({id:S.nid++,...o,...(o.cat?{}:{cat:undefined})});
