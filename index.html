@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Payday Planner</title>
 <meta name="theme-color" content="#14231e">
-<meta name="description" content="Plan every paycheck: see what your bills need this week, what to hold for heavy weeks, and what is left for savings and debt.">
+<meta name="description" content="Payday Planner plans your money one pay week at a time. See what your bills need, what to hold for heavy weeks, and what is left over to spend or save.">
+<link rel="canonical" href="https://mypayplanner.com/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Payday Planner: know what every paycheck has to cover">
+<meta property="og:description" content="Plan your money one pay week at a time. See what is left over after bills, savings and debt.">
+<meta property="og:url" content="https://mypayplanner.com/">
+<meta property="og:image" content="https://mypayplanner.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -14,12 +21,12 @@
 <meta name="apple-mobile-web-app-title" content="Payday">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
-// Returning visitors and installed copies go straight to the planner. Add ?home to see this page anyway.
-try{var sa=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone,has=localStorage.getItem('payday1')||localStorage.getItem('payday_seen');if((sa||has)&&location.search.indexOf('home')<0)location.replace('app.html')}catch(e){}
+// Installed copies and returning visitors go straight to the planner (it asks them to sign in if needed). Add ?home to see this page anyway.
+try{var sa=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone,has=localStorage.getItem('payday_seen');if((sa||has)&&location.search.indexOf('home')<0)location.replace('app.html')}catch(e){}
 </script>
 <style>
-:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--acc:#14231e;--accf:#fff}
-@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--acc:#e8efeb;--accf:#0f1714}}
+:root{--bg:#f2f5f1;--sf:#fff;--ink:#14231e;--mut:#5d6d66;--ln:#d9e0db;--inc:#1d7a4b;--exp:#b3402e;--goal:#2b5ea7;--acc:#14231e;--accf:#fff;--tint:#e6efe9}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1714;--sf:#18231f;--ink:#e8efeb;--mut:#93a39b;--ln:#2a3a34;--inc:#5fc88f;--exp:#f08a76;--goal:#7fa8ec;--acc:#e8efeb;--accf:#0f1714;--tint:#16231d}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Instrument Sans",system-ui,-apple-system,Segoe UI,sans-serif}
@@ -28,91 +35,135 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Instrument S
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:16px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em;color:inherit;text-decoration:none}
 .logo img{width:32px;height:32px;border-radius:8px}
-.nav{display:flex;gap:8px;align-items:center}
+.nav{display:flex;gap:6px;align-items:center}
+.nav a.t{color:var(--mut);text-decoration:none;padding:8px 10px;font-size:15px}
+.nav a.t:hover{color:var(--ink)}
 .btn{display:inline-block;background:var(--acc);color:var(--accf);border:0;border-radius:8px;padding:11px 18px;font:inherit;font-weight:600;text-decoration:none;cursor:pointer;text-align:center}
 .btn.ghost{background:none;color:var(--ink);border:1px solid var(--ln)}
-.btn:focus-visible,a:focus-visible,button:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
-.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:36px;align-items:center;padding-block:36px 56px}
-h1{font-size:clamp(32px,6vw,52px);line-height:1.08;letter-spacing:-.03em;margin:0 0 16px;text-wrap:balance}
+.btn.lg{padding:14px 22px;font-size:17px}
+.btn:focus-visible,a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center;padding-block:32px 60px}
+h1{font-size:clamp(34px,6vw,56px);line-height:1.06;letter-spacing:-.03em;margin:0 0 16px;text-wrap:balance}
 .lead{font-size:18px;color:var(--mut);margin:0 0 24px;max-width:34em}
 .cta{display:flex;gap:10px;flex-wrap:wrap}
 .fine{font-size:13px;color:var(--mut);margin-top:12px}
-.shots{display:flex;gap:14px;justify-content:center}
-.shots img{width:48%;max-width:230px;border:1px solid var(--ln);border-radius:18px;box-shadow:0 10px 30px #0002;background:var(--sf)}
-.shots img:last-child{margin-top:34px}
-h2{font-size:28px;letter-spacing:-.02em;margin:0 0 20px;text-wrap:balance}
-section{padding-block:36px;border-top:1px solid var(--ln)}
-.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.shots{display:flex;gap:16px;justify-content:center;align-items:flex-start}
+.shots img{flex:0 0 auto;width:min(46%,240px);height:auto;aspect-ratio:1/2;object-fit:cover;border:1px solid var(--ln);border-radius:22px;box-shadow:0 14px 36px #0003;background:var(--sf)}
+.shots img+img{margin-top:40px}
+h2{font-size:clamp(24px,4vw,30px);letter-spacing:-.02em;margin:0 0 8px;text-wrap:balance}
+.sub{color:var(--mut);margin:0 0 22px;max-width:40em}
+section{padding-block:44px;border-top:1px solid var(--ln)}
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
 .card{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:18px}
 .card h3{margin:0 0 6px;font-size:17px}
 .card p{margin:0;color:var(--mut);font-size:15px}
-.k{display:inline-block;font-weight:700;color:var(--inc)}
 .steps{counter-reset:s;display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));padding:0;margin:0;list-style:none}
 .steps li{counter-increment:s;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:18px}
 .steps li::before{content:counter(s);display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--acc);color:var(--accf);align-items:center;justify-content:center;font-weight:700;margin-bottom:8px}
 .steps b{display:block;margin-bottom:4px}
 .steps span{color:var(--mut);font-size:15px}
+.band{background:var(--tint);border-radius:16px;padding:28px;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.band div b{display:block;margin-bottom:2px}
+.band div span{color:var(--mut);font-size:15px}
 .two{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
 ol.i{margin:8px 0 0;padding-left:20px;color:var(--mut);font-size:15px}
-.acct{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
-footer{padding-block:28px 40px;border-top:1px solid var(--ln);color:var(--mut);font-size:14px;display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}
+details{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:14px 18px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+details p{margin:8px 0 0;color:var(--mut);font-size:15px}
+.final{text-align:center;padding-block:56px}
+.final .cta{justify-content:center}
+footer{padding-block:28px 40px;border-top:1px solid var(--ln);color:var(--mut);font-size:14px;display:flex;gap:12px 20px;justify-content:space-between;flex-wrap:wrap}
 footer a{color:inherit}
-@media (max-width:760px){.hero{grid-template-columns:1fr;padding-top:12px}.shots{order:-1}.nav .ghost{display:none}}
+footer nav{display:flex;gap:16px;flex-wrap:wrap}
+@media (max-width:760px){.hero{grid-template-columns:1fr;padding-top:8px}.nav a.t{display:none}.shots{margin-top:8px}}
+.nav .btn,.logo{white-space:nowrap}
+@media (max-width:400px){.logo span{display:none}.nav .btn{padding:9px 12px;font-size:15px}}
 </style>
 </head>
 <body>
 <div class="w">
 <header>
-<a class="logo" href="index.html?home"><img src="icon-192.png" alt="">Payday Planner</a>
-<nav class="nav" aria-label="Main"><a class="btn ghost" href="auth.html">Sign in</a><a class="btn" href="app.html">Open the app</a></nav>
+<a class="logo" href="index.html?home"><img src="icon-192.png" alt="" width="32" height="32"><span>Payday Planner</span></a>
+<nav class="nav" aria-label="Main"><a class="t" href="#features">Features</a><a class="t" href="#how">How it works</a><a class="t" href="#faq">FAQ</a><a class="btn ghost" href="auth.html">Sign in</a><a class="btn" href="auth.html?new">Create account</a></nav>
 </header>
 
 <div class="hero">
 <div>
 <h1>Know what every paycheck has to cover.</h1>
-<p class="lead">Payday Planner works out what this week’s bills need, what to hold back for heavy weeks, and what is truly left for savings and debt, all on a calendar you can read at a glance.</p>
-<div class="cta"><a class="btn" href="app.html">Open the app, no account needed</a><a class="btn ghost" href="auth.html">Create an account</a></div>
-<div class="fine">Free to use. Works on iPhone, Android and computers. Create a free account to save your planner online, or use it without one.</div>
+<p class="lead">Payday Planner plans your money one pay week at a time. It shows what this week’s bills need, what to hold back for heavy weeks, and what is left over to spend, save or put toward debt.</p>
+<div class="cta"><a class="btn lg" href="auth.html?new">Create your free account</a><a class="btn ghost lg" href="auth.html">Sign in</a></div>
+<div class="fine">Free to start. No bank login needed. Works on iPhone, Android and computers.</div>
 </div>
-<div class="shots"><img src="shot-dashboard.png" alt="Dashboard showing the week's balance, bills and what is safe to spend" width="390" height="760"><img src="shot-calendar.png" alt="Month calendar with bills and paychecks marked" width="390" height="760"></div>
+<div class="shots"><img src="shot-dashboard.png" alt="The dashboard: the amount left over after bills, plus the balance and bills still due" width="780" height="1560"><img src="shot-calendar.png" alt="A month calendar with paychecks and bills marked on their days" width="780" height="1560"></div>
 </div>
+
+<section id="who">
+<h2>Made for people who plan around payday</h2>
+<p class="sub">Whether you are budgeting solo, managing money with a partner, or just learning where it all goes, the plan starts from your paycheck.</p>
+<div class="cards">
+<div class="card"><h3>Individuals</h3><p>Get a clear number for what you can spend before your next payday, without a spreadsheet.</p></div>
+<div class="card"><h3>Couples</h3><p>Plan around the way you both get paid. Shared plans for two people are on the way.</p></div>
+<div class="card"><h3>New to budgeting</h3><p>Simple words, no jargon. Add your paycheck and bills, and the planner does the math.</p></div>
+</div>
+</section>
 
 <section id="features">
 <h2>Built around payday, not the calendar month</h2>
+<p class="sub">Each paycheck funds the week ahead, from payday to the day before the next one.</p>
 <div class="cards">
-<div class="card"><h3>Pay-week planning</h3><p>Each paycheck funds the week ahead, from payday to the day before the next one. See bills, what is held, and what is left to spend.</p></div>
-<div class="card"><h3>Heavy weeks handled</h3><p>Rent at the start of the month and car payments at the end? The planner spreads the shortfall across lighter weeks so you are never caught short.</p></div>
-<div class="card"><h3>Goals that work backwards</h3><p>Set a target and a date. It tells you what to set aside each payday, funded after your bills.</p></div>
-<div class="card"><h3>Debt payoff mode</h3><p>Enter what you owe, the interest rate and your minimum. See extra payments and an estimated debt-free date.</p></div>
-<div class="card"><h3>Flexible bills</h3><p>Change one payment, skip it, or update this and future payments. Mark bills paid and your balance follows.</p></div>
-<div class="card"><h3>Reminders and spending</h3><p>Alerts for the week’s bills and for anything due tomorrow, plus a simple spending summary by category.</p></div>
+<div class="card"><h3>Left over, at a glance</h3><p>One number on your dashboard: what is safe to spend until your next payday, after bills, savings and debt.</p></div>
+<div class="card"><h3>Heavy weeks handled</h3><p>Rent early in the month and a car payment at the end? The planner sets money aside from lighter weeks so you are never caught short.</p></div>
+<div class="card"><h3>Goals that work backwards</h3><p>Set a target and a date. It tells you what to set aside each payday, after your bills are covered.</p></div>
+<div class="card"><h3>Debt payoff</h3><p>Add what you owe, the interest rate and your minimum. Choose avalanche or snowball and see an estimated debt-free date.</p></div>
+<div class="card"><h3>Budgets and spending</h3><p>Set a monthly amount for groceries or anything else. It is split across your paydays, and unspent money rolls over.</p></div>
+<div class="card"><h3>Reminders and calendar</h3><p>See every paycheck and bill on a calendar. See reminders for the week’s bills and for anything due tomorrow.</p></div>
 </div>
 </section>
 
 <section id="how">
 <h2>Up and running in three steps</h2>
 <ol class="steps">
+<li><b>Create your free account</b><span>Use your email. Confirm it, then sign in on any device.</span></li>
 <li><b>Add your paycheck and bills</b><span>Enter what comes in and what is due, and how often each repeats.</span></li>
-<li><b>See your pay week</b><span>Your dashboard shows what is covered, what to hold, and what is safe to spend.</span></li>
-<li><b>Set a goal</b><span>Save for something or pay down a debt, and follow the plan each payday.</span></li>
+<li><b>Follow your pay week</b><span>See what is covered, what is held, and what is left over to spend.</span></li>
 </ol>
+</section>
+
+<section id="privacy">
+<h2>Your money details stay yours</h2>
+<div class="band">
+<div><b>No bank login</b><span>We never ask to connect your bank. You enter only what you choose.</span></div>
+<div><b>Private to you</b><span>Your planner is saved to your account and only you can see it.</span></div>
+<div><b>Delete any time</b><span>Delete your account and everything in it from Settings.</span></div>
+<div><b>Receipt photos aren’t saved</b><span>Photos are read on your device to find the total. They are not stored.</span></div>
+</div>
 </section>
 
 <section id="install">
 <h2>Put it on your phone</h2>
+<p class="sub">Create your account, then add Payday Planner to your home screen so it opens like an app.</p>
 <div class="two">
 <div class="card"><h3>iPhone or iPad</h3><ol class="i"><li>Open this site in Safari.</li><li>Tap the Share button.</li><li>Choose <b>Add to Home Screen</b>.</li></ol></div>
 <div class="card"><h3>Android</h3><ol class="i"><li>Open this site in Chrome.</li><li>Open the menu.</li><li>Tap <b>Install app</b> or <b>Add to Home screen</b>.</li></ol></div>
 </div>
 </section>
 
-<section id="account">
-<h2>Your data stays yours</h2>
-<p class="lead" style="margin-bottom:12px">With a free account, your planner is saved privately online and follows you between phone and computer. Only you can see it. You can also use the app with no account at all, and it will save on your own device. Either way, you can export a backup any time from Settings.</p>
-<div class="acct"><a class="btn" href="app.html">Open the app</a><a class="btn ghost" href="auth.html">Sign in or create an account</a></div>
+<section id="faq">
+<h2>Questions</h2>
+<details><summary>Is it free?</summary><p>Yes, you can create an account and use Payday Planner for free. If we add paid plans later, we will tell you well before anything changes, and you will never be charged without agreeing first.</p></details>
+<details><summary>Do I have to connect my bank account?</summary><p>No. You type in your paycheck, bills and balance yourself. We never ask for your bank login.</p></details>
+<details><summary>Who can see my budget?</summary><p>Only you. Your planner is tied to your account, and our database is set up so other users cannot read it.</p></details>
+<details><summary>Can I delete my data?</summary><p>Yes. In Settings, choose Delete my account to permanently remove your account and everything in it. You can also export a backup first.</p></details>
+<details><summary>Is this financial advice?</summary><p>No. Payday Planner is a planning tool. Its numbers come from what you enter, so please check them against your bank.</p></details>
 </section>
 
-<footer><span>Payday Planner</span><span>This app is a planning tool, not financial advice.</span></footer>
+<section class="final">
+<h2>See what your next paycheck has to cover</h2>
+<p class="sub" style="margin-inline:auto">It takes a few minutes to set up.</p>
+<div class="cta"><a class="btn lg" href="auth.html?new">Create your free account</a><a class="btn ghost lg" href="auth.html">Sign in</a></div>
+</section>
+
+<footer><span>© 2026 Payday Planner</span><nav aria-label="Legal"><a href="privacy.html">Privacy Policy</a><a href="terms.html">Terms of Service</a></nav><span>A planning tool, not financial advice.</span></footer>
 </div>
 </body>
 </html>

@@ -44,10 +44,10 @@ Payday Planner is a free budgeting app that plans your money around your paychec
 
 ## Your data and backups
 
-Your information is saved on your own device. Nothing is sent to a server yet.
+You need a free account to use the app. Your plan is saved to your account, so it is the same on your phone and your computer.
 - Use **Export** in Settings to save a backup file, and **Import** to restore it.
-- Export a backup before you delete the app icon or clear your browser data.
-- Phone and computer data are separate until accounts are added.
+- **Sign out** and **Delete my account** are in Settings. Deleting removes your account and all your data.
+- The app needs an internet connection to load your plan.
 
 ## Updating the app
 
@@ -58,13 +58,16 @@ When a new version is uploaded, close and reopen the app twice to load it.
 Files in this folder:
 - `index.html`: landing page
 - `app.html`: the planner
-- `auth.html`: sign-in page (not active until accounts are added)
+- `auth.html`: sign in and create account
+- `privacy.html`, `terms.html`: legal pages (fill in the highlighted placeholders)
+- `og-image.png`: preview picture for shared links
+- `shot-dashboard.png`, `shot-calendar.png`: pictures on the landing page
 - `manifest.webmanifest`, `sw.js`, icons: phone install support
 
 To update: **Add file → Upload files**, drop in the changed files, then **Commit changes**. The site refreshes in about a minute.
 
 ## Coming next
 
-Accounts and sync across devices, shared plans for couples, background reminders, a custom domain, and iPhone and Android app store versions.
+Shared plans for couples, offline use, background reminders, paid plans, and iPhone and Android app store versions.
 
 Payday Planner is a budgeting tool, not financial advice.

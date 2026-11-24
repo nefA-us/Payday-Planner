@@ -51,10 +51,10 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(-
 <label>Password<input id="pw" type="password" autocomplete="current-password"></label>
 <ul class="hint" id="pwh" hidden aria-live="polite"></ul>
 <button class="btn" id="go" type="submit" disabled>Sign in</button>
+<div class="fine" id="consent" hidden>By creating an account you agree to the <a href="terms.html">Terms of Service</a> and the <a href="privacy.html">Privacy Policy</a>.</div>
 <button class="lnk" id="forgot" type="button">Forgot your password?</button>
 </form>
 <form id="rf" novalidate hidden><label>New password<input id="np" type="password" autocomplete="new-password"></label><ul class="hint" id="nph" aria-live="polite"></ul><button class="btn" id="rgo" type="submit">Save new password</button></form>
-<a class="btn ghost" href="app.html">Continue without an account</a>
 <div class="fine"><a href="index.html?home">Back to the home page</a></div>
 </div>
 </main>
@@ -82,9 +82,10 @@ function mode(u){up=u;$('tIn').className=u?'':'on';$('tUp').className=u?'on':'';
 $('tIn').setAttribute('aria-selected',!u);$('tUp').setAttribute('aria-selected',u);
 $('ttl').textContent=u?'Create your account':'Welcome back';
 $('nameL').hidden=!u;$('go').textContent=u?'Create account':'Sign in';$('forgot').hidden=u;
-$('pw').autocomplete=u?'new-password':'current-password';$('pwh').hidden=!u;if(u)drawRules($('pwh'),$('pw').value);say('')}
+$('pw').autocomplete=u?'new-password':'current-password';$('pwh').hidden=!u;$('consent').hidden=!u;if(u)drawRules($('pwh'),$('pw').value);say('')}
 function ready(){$('go').disabled=!sb||!$('em').value.trim()||!$('pw').value}
 $('tIn').onclick=function(){mode(false)};$('tUp').onclick=function(){mode(true)};
+if(/[?&]new\b/.test(location.search))mode(true);
 ['em','pw'].forEach(function(i){$(i).addEventListener('input',ready)});
 $('pw').addEventListener('input',function(){if(up)drawRules($('pwh'),$('pw').value)});
 $('np').addEventListener('input',function(){drawRules($('nph'),$('np').value)});drawRules($('nph'),'');
