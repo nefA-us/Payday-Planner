@@ -125,6 +125,13 @@ dialog .chk input{width:22px;height:22px;min-height:0;margin:0}
 .pwd{margin-top:12px}
 .pwd>summary{font-size:16px;font-weight:700;cursor:pointer;padding:10px 0;list-style-position:inside}
 .pwd>summary:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
+.sec{border-top:1px solid var(--ln);margin-top:10px}
+.sec>summary{font-size:16px;font-weight:700;cursor:pointer;padding:12px 0;list-style-position:inside}
+.sec>summary:focus-visible{outline:2px solid var(--goal);outline-offset:2px}
+.sec>div,.sec>label,.sec>.acts{margin-bottom:10px}
+.sec .acts{justify-content:flex-start;flex-wrap:wrap}
+.wl{padding-left:20px;margin:10px 0}.wl li{margin:6px 0}
+.rules{list-style:none;padding:0;margin:6px 0;font-size:13px;color:var(--mut)}.rules li:before{content:'○ '}.rules li.ok{color:var(--inc)}.rules li.ok:before{content:'✓ '}
 .pw{margin-top:8px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
 .row2 .row{border:0}
 @media (max-width:700px){.cal-wide{display:none}.cal-mini{display:block}.cal-head .btn{padding:7px 10px}}
@@ -178,24 +185,26 @@ function queue(){clearTimeout(qt);qt=setTimeout(flush,300);paint('saving')}
 async function flush(){if(!ref||saving||!dirty||state!=='ready'||conflictRow)return;saving=true;dirty=false;paint('saving');let err=null;
 try{await ref.set(clean())}catch(e){err=e||{}}
 saving=false;
-if(!err){retried=false;if(dirty)queue();else paint('saved');return}
+if(!err){retried=false;offline=false;if(dirty)queue();else paint('saved');return}
 if(err.code==='invalid_argument'){readonly=true;paint('readonly');render();return}
-dirty=true;paint('error');
+dirty=true;
+if(err.code!=='conflict'&&!navigator.onLine){offline=true;paint('offline');return}
+paint('error');
 if(err.code==='conflict'){conflictRow=err.row;conflictDlg();return}
 if(err.code==='unavailable'&&!retried){retried=true;setTimeout(flush,1500)}}
-const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…','']};
-function paint(s){if(s)status=s;const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
+const LBL={saved:['Saved to your account','ok'],saving:['Saving…',''],error:['Not saved. Tap to retry','bad'],readonly:['View only, changes are not saved','warn'],local:['Saved in this browser only','warn'],loading:['Connecting…',''],offline:['Offline. Saved on this device','warn']};
+function paint(s){if(s)status=s;cacheWrite();const b=$('#stat'),l=LBL[status]||LBL.loading;b.textContent=l[0];b.className='pill '+l[1];
 $('#acct').innerHTML=account&&mode==='cloud'?(account.avatarUrl?`<img src="${esc(account.avatarUrl)}" alt="">`:'')+`<span>${esc(account.name||'You')}</span>`:''}
 // First visit for this account: move the old browser copy if there is one, otherwise start with samples
 async function firstRun(){first=true;let init=null,moved=false;
 try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)){init=norm(o);moved=true}}catch(e){}
 if(!init)init=seed();
-S=init;
+S=init;if(!moved)S.set.welcome=1;
 try{await ref.set(clean());state='ready';clearTimeout(slowT);
 if(moved){try{localStorage.setItem('payday_local_backup',localStorage.getItem('payday1'));localStorage.removeItem('payday1')}catch(e){}notice='Your planner was moved from this device to your account. A backup copy stays on this device.'}
 paint('saved')}
 catch(err){state='ready';clearTimeout(slowT);if(err&&err.code==='invalid_argument'){readonly=true;paint('readonly')}else{dirty=true;paint('error')}}
-first=false;render()}
+first=false;render();if(S.set.welcome){delete S.set.welcome;save();welcomeDlg()}}
 function onSnap(snap){if(mode!=='cloud'||state==='deleted'||first)return;
 if(snap.exists){const d=norm(snap.data());
 if(state!=='ready'){S=d;state='ready';clearTimeout(slowT);paint(readonly?'readonly':'saved');render();return}
@@ -214,7 +223,28 @@ else{const r=await sbBoot();
 if(r==='noauth'){location.replace('auth.html');return}
 if(r!==true){state='error';errMsg='Sign-in could not load. Check your connection, then reload this page.';paint('error');render()}}}
 // Payday Planner accounts (Supabase), website only
-let sb=null,planId=null,planAt=null,sbm=false,conflictRow=null;
+let sb=null,planId=null,planAt=null,sbm=false,conflictRow=null,offline=false;
+const APPV='24 Nov 2026, build 10';
+// Copy of the plan on this device, so the app opens and works without a connection. Cleared at sign-out.
+const CK=()=>'payday_cache_'+((account&&account.email)||'');
+function cacheWrite(){if(!sbm||!account||state!=='ready')return;try{localStorage.setItem(CK(),JSON.stringify({email:account.email,planId,planAt,dirty:!!(dirty||saving),data:S,at:Date.now()}))}catch(e){}}
+function cacheRead(k){try{const o=JSON.parse(localStorage.getItem(k));return o&&o.data&&Array.isArray(o.data.e)?o:null}catch(e){return null}}
+function cacheKey(){try{return Object.keys(localStorage).find(k=>k.indexOf('payday_cache_')===0)||null}catch(e){return null}}
+function cacheClear(){try{Object.keys(localStorage).filter(k=>k.indexOf('payday_cache_')===0).forEach(k=>localStorage.removeItem(k))}catch(e){}}
+// Crash reports: the error text, page, app version and browser type only. Never your entries. Can be turned off in Settings.
+let errN=0;const errSeen={};
+function reportErr(kind,msg,stack){try{if(localStorage.getItem('payday_noerr')==='1'||!sb||!sbm||errN>=5)return;const k=kind+'|'+msg;if(errSeen[k])return;errSeen[k]=1;errN++;
+sb.from('error_reports').insert({kind:kind,message:String(msg||'').slice(0,500),stack:String(stack||'').slice(0,2000),page:location.pathname,app_version:APPV,agent:navigator.userAgent.slice(0,200)}).then(()=>{},()=>{})}catch(e){}}
+window.addEventListener('error',e=>reportErr('error',e.message,e.error&&e.error.stack));
+window.addEventListener('unhandledrejection',e=>{const r=e.reason;reportErr('promise',(r&&r.message)||r,r&&r.stack)});
+async function reconnect(){if(!sbm||state!=='ready'||conflictRow)return;
+try{const row=await sbLoad();offline=false;
+if(!row){if(dirty)flush();else paint('saved');return}
+if(row.updated_at===planAt){if(dirty)flush();else paint('saved')}
+else if(!dirty){planId=row.id;planAt=row.updated_at;S=norm(row.data);paint('saved');render()}
+else{conflictRow=row;paint('error');conflictDlg()}}catch(e){}}
+window.addEventListener('online',reconnect);
+window.addEventListener('offline',()=>{if(sbm&&state==='ready'){offline=true;paint('offline')}});
 const sbErr=()=>{const x=new Error('sb');x.code='unavailable';return x};
 async function sbLoad(){const r=await sb.from('plans').select('id,data,updated_at').order('updated_at',{ascending:false}).limit(1);if(r.error)throw r.error;return r.data&&r.data[0]||null}
 // Saving checks that nobody else saved since we last loaded (updated_at). If someone did, nothing is overwritten and the person chooses which version to keep.
@@ -222,23 +252,29 @@ function sbRef(){return{set:async d=>{try{if(planId){const r=await sb.from('plan
 if(!r.data||!r.data.length){const cur=await sbLoad();if(cur&&cur.updated_at!==planAt){const x=new Error('conflict');x.code='conflict';x.row=cur;throw x}throw new Error('not saved')}
 planAt=r.data[0].updated_at}
 else{const r=await sb.from('plans').insert({data:d}).select('id,updated_at').single();if(r.error)throw r.error;planId=r.data.id;planAt=r.data.updated_at}}catch(e){if(e&&e.code==='conflict')throw e;throw sbErr()}}}}
+function welcomeDlg(){dlg(`<h2>Welcome to Payday Planner</h2><div class="small">Plan each paycheck one week at a time. Three steps to get going:</div><ol class="wl"><li><b>Add your paychecks and bills</b> on the Entries tab.</li><li><b>Update your bank balance</b> in Settings, so the numbers start from your real money.</li><li><b>Check the Dashboard.</b> The Left over card shows what is safe to spend until your next payday.</li></ol><div class="small">We added a few sample entries so you can look around. Clear them when you are ready to use your own.</div><div class="acts"><button class="btn ghost" data-x type="button">Look around first</button><button class="btn" data-wclear type="button">Start with my own</button></div>`)}
 function conflictDlg(){dlg(`<h2>Changed on another device</h2><div class="small">This planner was saved from another phone or computer after you opened it. Nothing was overwritten. Choose which version to keep.</div><div class="acts"><button class="btn" data-cuse type="button">Use the newer version</button><button class="btn del" data-ckeep type="button">Keep what I have here</button></div><div class="small">The newer version replaces what you see now, including the change you just made. Keeping this one replaces the changes made on the other device.</div>`)}
 var RECOV=/type=recovery/.test(location.hash);if(RECOV)location.replace('auth.html'+location.hash);
 async function sbBoot(){if(!(window.PP_CONFIG&&window.supabase&&window.supabase.createClient))return 'nolib';
 let sess=null;
 try{sb=window.supabase.createClient(PP_CONFIG.url,PP_CONFIG.key,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const g=await sb.auth.getSession();sess=g&&g.data&&g.data.session}catch(e){return 'nolib'}
-if(!sess)return 'noauth';
-mode='cloud';sbm=true;account={name:sess.user.email,email:sess.user.email,avatarUrl:''};ref=sbRef();
+let ck=null;
+if(!sess&&!navigator.onLine){ck=cacheKey();if(!ck)return 'noauth'}
+else if(!sess)return 'noauth';
+const em=sess?sess.user.email:ck.slice('payday_cache_'.length);
+mode='cloud';sbm=true;account={name:em,email:em,avatarUrl:''};ref=sbRef();
 try{const row=await sbLoad();
 if(row){planId=row.id;planAt=row.updated_at;S=norm(row.data);state='ready';paint('saved');
 try{const o=JSON.parse(localStorage.getItem('payday1'));if(o&&Array.isArray(o.e)&&o.e.length&&!o.demo){localStorage.setItem('payday_local_backup',JSON.stringify(o));localStorage.removeItem('payday1');notice='You are signed in. Your account data is shown. The data that was saved on this device is kept as a backup. Use Settings, Import backup if you want it back.'}}catch(e){}
 render()}
 else await firstRun()}
-catch(e){state='error';errMsg='Your account data could not be reached. Check your connection, then close and reopen the app.';render()}
+catch(e){const c=cacheRead(CK());
+if(c){planId=c.planId;planAt=c.planAt;S=norm(c.data);state='ready';offline=true;dirty=!!c.dirty;paint('offline');render()}
+else{state='error';errMsg='Your account data could not be reached. Check your connection, then close and reopen the app.';render()}}
 return true}
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState!=='visible'||!sbm||state!=='ready'||dirty||saving)return;
-try{const row=await sbLoad();if(row&&!dirty&&!saving&&!conflictRow){const d=norm(row.data);planAt=row.updated_at;if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}}}catch(e){}});
+try{const row=await sbLoad();offline=false;if(row&&!dirty&&!saving&&!conflictRow){const d=norm(row.data);planAt=row.updated_at;if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}cacheWrite()}}catch(e){}});
 const wkStart=d=>addD(d,-((d.getDay()-S.set.payday+7)%7));
 // Pattern dates of an entry (before any one-off changes), inside [a,b]
 function occ(e,a,b){const o=[],s=pd(e.d);
@@ -440,11 +476,11 @@ items(t,end).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as).forEach(x=>ev('b'+x.e.id+'-'+
 for(let w=wkStart(t);w<=end;w=addD(w,7)){const b=items(w,addD(w,6)).filter(x=>x.e.t==='e'&&!x.p&&x.d>=as);if(b.length)ev('w'+ymd(w),w,'Pay week: '+fmt(b.reduce((s,x)=>s+ +x.a,0))+' in bills',b.map(x=>sd(x.d)+' '+x.e.n+' '+fmt(x.a)).join('\n'),'PT9H')}
 L.push('END:VCALENDAR');
 try{const b=new Blob([L.join('\r\n')],{type:'text/calendar'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='payday-planner-reminders.ics';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(e){notice='The calendar file could not be created.';render()}}
-function notifZone(){let h='<div class="zone"><b>Reminders</b><div class="small">The dashboard lists this pay week’s bills at the start of the week, and any bill due tomorrow.</div>';
+function notifZone(){let h='<div class="small">The dashboard lists this pay week’s bills at the start of the week, and any bill due tomorrow.</div>';
 if(!window.claude){h+='<div class="acts" style="justify-content:flex-start;flex-wrap:wrap">';
 if(window.Notification){const p=Notification.permission;h+=p==='granted'?'<span class="small">Device alerts are on. They show when you open the app.</span>':p==='denied'?'<span class="small">Device alerts are blocked in this browser’s settings.</span>':'<button class="btn ghost" data-notif type="button">Turn on device alerts</button>'}
 h+='<button class="btn ghost" data-ics type="button">Download calendar reminders</button></div><div class="small">Calendar reminders add the next 60 days of bills to your phone’s calendar, with an alert the day before each bill and one at the start of each pay week. Those work even when the app is closed. Download again after big changes.</div>'}
-return h+'</div>'}
+return h}
 function dash(){const W=forecast(9),w=W[0],t=today(),nxt=addD(w.a,7),days=Math.round((nxt-t)/DAY),as=pd(S.set.asof),stale=Math.round((t-as)/DAY);
 let h='';
 if(S.e.length){const left=w.avail-w.goal,short=w.status==='short',neg=short||left<0,amt=short?w.end:left,
@@ -568,9 +604,32 @@ dlg(`<h2>${id?'Edit':'Add'} goal</h2>${fld('Name','gn',g.n)}<label>Type<select i
 <div id="gs-d" ${db?'':'hidden'}>${fld('Amount owed now','go',g.o??'','number','min="0" step="0.01"')}${fld('Interest rate (APR %)','gi',g.i??'','number','min="0" step="0.01"')}${fld('Monthly minimum (already in my bills)','gm',g.m??'','number','min="0" step="0.01"')}${fld('Original balance (for the progress bar, optional)','g0',g.t0??'','number','min="0"')}<div class="small">Debt payoff is extra money on top of your minimum. It lowers what you owe and leaves your bank balance. It is not counted as savings. With two or more debts, extra money follows your payoff method in Settings (Avalanche unless you change it).</div></div>
 ${fld('Target date (optional)','gd',g.d,'date')}<div class="acts" style="justify-content:flex-start;margin-top:6px"><button class="btn ghost sm" data-cdate type="button">Remove date</button></div><div class="small">With a date, the planner spreads what is needed evenly across your paydays until then.</div><label>Priority<select id="gp"><option value="5" ${g.p==5?'selected':''}>High</option><option value="3" ${g.p==3?'selected':''}>Medium</option><option value="1" ${g.p==1?'selected':''}>Low</option></select></label>
 <div class="acts">${id?`<button class="btn del" data-gdel="${id}" type="button">Delete</button>`:''}<button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-gsave="${id||0}" type="button">Save</button></div>`)}
-function setDlg(){const s=S.set;wipeArmed=false;
-dlg(`<h2>Settings</h2><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}<label>Debt payoff method (for two or more debts)<select id="sdm"><option value="a" ${mth()==='a'?'selected':''}>Avalanche: highest interest first</option><option value="s" ${mth()==='s'?'selected':''}>Snowball: smallest balance first</option></select></label><div class="small"><b>Avalanche</b> sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.<br><b>Snowball</b> sends it to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.</div>${fld('Share of spare money sent to debt (%)','sdp',S.set.dpct==null?100:S.set.dpct,'number','min="0" max="100" step="5"')}<div class="small">Each week, after bills and reserves, this share of what is left goes to extra debt payments. The rest stays as Left over for you. 100 means all of it. A debt with a target date still gets what it needs to finish on time. Minimum payments stay in your bills.</div><label>When you overspend a budget<select id="sov"><option value="carry" ${ovr()==='carry'?'selected':''}>Carry it forward (taken out of later weeks)</option><option value="reset" ${ovr()==='reset'?'selected':''}>Reset to zero each month</option></select></label><div class="small">Paid weekly or every two weeks? Carrying forward keeps the budget honest. Paid once a month? Reset gives you a fresh budget each month. Unspent money always rolls over.</div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
-${notifZone()}<div class="zone"><div class="small">${sbm?'Signed in as '+esc(account.email)+'. Your planner is saved to your account and only you can see it.':mode==='cloud'?'Your planner is stored in your private space on Claude. Other people who open this page cannot see it.':'Your planner is stored in this browser only.'}</div><div class="small" style="margin-top:6px">Importing a backup replaces what is in this planner.</div><div class="small" style="margin-top:6px">App version: 24 Nov 2026, build 9</div><div class="acts" style="justify-content:flex-start;flex-wrap:wrap"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button><button class="btn ghost" id="bkUpd" type="button">Check for update</button>${sbm?'<button class="btn ghost" id="bkOut" type="button">Sign out</button><button class="btn del" id="bkDel" type="button">Delete my account</button>':''}<button class="btn del" data-wipe type="button">Delete all my data</button></div></div>`)}
+function setDlg(){const s=S.set;wipeArmed=false;const noerr=(()=>{try{return localStorage.getItem('payday_noerr')==='1'}catch(e){return false}})();
+const acct=sbm?`<div class="small">Signed in as <b>${esc(account.email)}</b>. Your planner is saved to your account and only you can see it.${offline?' You are offline now. Changes are kept on this device and sync when you reconnect.':''}</div><div class="acts"><button class="btn ghost" id="bkPw" type="button">Change password</button><button class="btn ghost" id="bkOut" type="button">Sign out</button></div><div class="small">Deleting your account permanently removes it and everything in it.</div><div class="acts"><button class="btn del" id="bkDel" type="button">Delete my account</button></div>`:mode==='cloud'?'<div class="small">Your planner is stored in your private space on Claude. Other people who open this page cannot see it.</div>':'<div class="small">Your planner is stored in this browser only.</div>';
+dlg(`<h2>Settings</h2>
+<details class="sec" open><summary>Your plan</summary><label>Payday<select id="sp">${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i)=>`<option value="${i}" ${s.payday==i?'selected':''}>${d}</option>`).join('')}</select></label>${fld('Bank balance','sb',s.bal,'number','step="0.01"')}${fld('Balance as of','sa',s.asof,'date')}${fld('Safety buffer (never put toward goals)','su',s.buf,'number','min="0"')}</details>
+<details class="sec"><summary>Debt and budgets</summary><label>Debt payoff method (for two or more debts)<select id="sdm"><option value="a" ${mth()==='a'?'selected':''}>Avalanche: highest interest first</option><option value="s" ${mth()==='s'?'selected':''}>Snowball: smallest balance first</option></select></label><div class="small"><b>Avalanche</b> sends extra money to the debt with the highest interest rate first. It usually costs the least interest and finishes soonest.<br><b>Snowball</b> sends it to the smallest balance first. You clear whole debts sooner, which many people find motivating, but it can cost a little more interest.</div>${fld('Share of spare money sent to debt (%)','sdp',S.set.dpct==null?100:S.set.dpct,'number','min="0" max="100" step="5"')}<div class="small">Each week, after bills and reserves, this share of what is left goes to extra debt payments. The rest stays as Left over for you. 100 means all of it. A debt with a target date still gets what it needs to finish on time. Minimum payments stay in your bills.</div><label>When you overspend a budget<select id="sov"><option value="carry" ${ovr()==='carry'?'selected':''}>Carry it forward (taken out of later weeks)</option><option value="reset" ${ovr()==='reset'?'selected':''}>Reset to zero each month</option></select></label><div class="small">Paid weekly or every two weeks? Carrying forward keeps the budget honest. Paid once a month? Reset gives you a fresh budget each month. Unspent money always rolls over.</div></details>
+<div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
+<details class="sec"><summary>Reminders</summary>${notifZone()}</details>
+<details class="sec"><summary>Backup and data</summary><div class="small">Save a copy of your planner, or restore one. Importing a backup replaces what is in this planner.</div><div class="acts"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button></div><div class="acts"><button class="btn del" data-wipe type="button">Delete all my data</button></div></details>
+<details class="sec"><summary>Account</summary>${acct}</details>
+<details class="sec"><summary>Help and about</summary><div class="acts"><a class="btn ghost" href="mailto:hello@mypayplanner.com?subject=Payday%20Planner%20feedback">Send feedback</a><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a><a class="btn ghost" href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>${sbm?`<label class="chk"><input id="noerr" type="checkbox" ${noerr?'':'checked'}> Send error reports to help fix problems</label><div class="small">Reports contain the error message, the page, the app version and your browser type. They never contain your entries.</div>`:''}<div class="small">App version: ${APPV}</div><div class="acts"><button class="btn ghost" id="bkUpd" type="button">Check for update</button></div></details>`)}
+// Change password: confirm the current one, then set a new one that meets the rules
+const PWR=[['At least 8 characters',p=>p.length>=8],['An uppercase letter (A to Z)',p=>/[A-Z]/.test(p)],['A lowercase letter (a to z)',p=>/[a-z]/.test(p)],['A number (0 to 9)',p=>/[0-9]/.test(p)],['A symbol, such as ! - _ @ # $ %',p=>/[^A-Za-z0-9]/.test(p)]];
+function pwDlg(){dlg(`<h2>Change password</h2><label>Current password<input id="pwCur" type="password" autocomplete="current-password"></label><label>New password<input id="pwNew" type="password" autocomplete="new-password"></label><ul class="rules" id="pwRules" aria-live="polite"></ul><div class="small exp" id="bkMsg" role="alert"></div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" id="pwGo" type="button">Change password</button></div>`);pwRules()}
+function pwRules(){const p=($('#pwNew')||{}).value||'';const u=$('#pwRules');if(u)u.innerHTML=PWR.map(r=>`<li class="${r[1](p)?'ok':''}">${r[0]}</li>`).join('')}
+async function pwSave(btn){const cur=$('#pwCur').value,nw=$('#pwNew').value;
+if(!navigator.onLine)return bkSay('You need an internet connection to change your password.');
+if(!cur)return bkSay('Type your current password.');
+const miss=PWR.filter(r=>!r[1](nw)).map(r=>r[0].charAt(0).toLowerCase()+r[0].slice(1));
+if(miss.length)return bkSay('Your new password still needs: '+miss.join('; ')+'.');
+if(nw===cur)return bkSay('Choose a new password that is different from your current one.');
+btn.disabled=true;btn.textContent='Saving…';bkSay('');
+try{const a=await sb.auth.signInWithPassword({email:account.email,password:cur});if(a.error){bkSay('Your current password is not right.');return}
+const r=await sb.auth.updateUser({password:nw});if(r.error){bkSay(/different|same/i.test(r.error.message||'')?'Choose a password you have not used before.':(r.error.message||'The password could not be changed.'));return}
+$('#dlg').close();toast('Password changed')}
+catch(x){bkSay('The password could not be changed. Check your connection and try again.')}
+finally{btn.disabled=false;btn.textContent='Change password'}}
 async function doWipe(){clearTimeout(qt);
 if(mode==='cloud'&&ref){dirty=false;
 try{await ref.delete()}catch(e){notice=e&&e.code==='invalid_argument'?'You have view-only access, so nothing was deleted.':'Your data could not be deleted right now. Try again.';$('#dlg').close();render();return}
@@ -579,8 +638,8 @@ else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
 $('#dlg').close();render()}
 const v=id=>$('#'+id).value;
 function after(){const d=$('#dlg');if(d.open&&dlgDay)dayDlg(dlgDay);render()}
-document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-cuse],[data-ckeep],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
-if(t.id==='stat'){if(conflictRow){conflictDlg();return}if(status==='error'){dirty=true;retried=false;flush()}return}
+document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-cuse],[data-wclear],[data-ckeep],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
+if(t.id==='stat'){if(conflictRow){conflictDlg();return}if(status==='offline'){reconnect();return}if(status==='error'){dirty=true;retried=false;flush()}return}
 if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
 if(t.id==='bAcc'){const w=forecast(1)[0],sn=snap();S.g.forEach(g=>{const x=w.gd[g.id]||0;if(!x)return;if(g.k==='d'){g.o=r2(Math.max(0,+g.o-x));S.set.bal=r2(+S.set.bal-x)}else g.s=r2(+g.s+x)});S.acc[ymd(w.a)]=1;save();render();return toast('Plan accepted for this week',sn)}
 if(!c)return;const d=c.dataset;
@@ -601,6 +660,7 @@ else if('skip'in d){const[i,k]=keyOf(d.skip),en=S.e.find(x=>x.id==i);if(!en)retu
 if(en.r==='o'){S.e=S.e.filter(x=>x.id!=i);toast('Deleted '+en.n,sn)}
 else{const x=exOf(en,k);if(x.p)setPaid(en,k,false);const y=exOf(en,k);y.s=1;delete y.a;delete y.md;toast('Skipped '+en.n+' on '+sd(pd(k)),sn)}
 save();$('#dlg').close();render()}
+else if('wclear'in d){S.e=[];S.g=[];S.b=[];S.sp=[];S.acc={};S.set.bal=0;S.set.buf=0;S.demo=false;tab='Entries';save();$('#dlg').close();render()}
 else if('cuse'in d){if(!conflictRow)return;S=norm(conflictRow.data);planAt=conflictRow.updated_at;conflictRow=null;dirty=false;$('#dlg').close();paint('saved');render();toast('Loaded the newer version')}
 else if('ckeep'in d){if(!conflictRow)return;planAt=conflictRow.updated_at;conflictRow=null;dirty=true;$('#dlg').close();flush()}
 else if('unskip'in d){const[i,k]=keyOf(d.unskip),en=S.e.find(x=>x.id==i);if(!en||!en.ex||!en.ex[k])return;const sn=snap();delete en.ex[k].s;tidy(en,k);save();render();toast('Restored '+en.n+' on '+sd(pd(k)),sn)}
@@ -642,7 +702,9 @@ else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
 else if('export'in d)backupDlg('export')
 else if('import'in d)backupDlg('import')});
 // Goal type and series scope switch what the pop-up shows
+document.addEventListener('input',e=>{if(e.target.id==='pwNew')pwRules()});
 document.addEventListener('change',e=>{const t=e.target;
+if(t.id==='noerr'){try{localStorage.setItem('payday_noerr',t.checked?'0':'1')}catch(x){}}
 if(t.id==='gk'){$('#gs-s').hidden=t.value==='d';$('#gs-d').hidden=t.value!=='d'}
 if(t.id==='fsc'){$('#fd').value=t.value==='fut'?t.dataset.from:t.dataset.all}});
 const bkName=()=>'payday-planner-backup-'+ymd(today())+'.json';
@@ -661,15 +723,19 @@ try{await navigator.share({title:'Payday Planner backup',text:txt});bkSay('Done.
 else if(id==='bkCopy'){const txt=JSON.stringify(S);try{await navigator.clipboard.writeText(txt);bkSay('Copied. Paste it into Notes to keep it.')}catch(x){const t=document.createElement('textarea');t.value=txt;t.style.cssText='width:100%;margin-top:8px';e.target.closest('dialog').appendChild(t);t.focus();t.select();bkSay('Select all the text below and copy it.')}}
 else if(id==='bkDl'){try{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=bkName();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);bkSay('If nothing downloaded, use Share or Copy instead.')}catch(x){bkSay('Download is not available here. Use Share or Copy instead.')}}
 else if(id==='bkFile')$('#fileIn').click();
+else if(id==='bkPw')pwDlg();
+else if(id==='pwGo')pwSave(e.target);
 else if(id==='bkDel'){dlg(`<h2>Delete your account?</h2><div class="small">This permanently deletes your account and everything saved in it: your entries, goals, budgets and spending. It cannot be undone. Export a backup first if you want to keep a copy.</div><label style="margin-top:10px">Type DELETE to confirm<input id="delTxt" autocomplete="off" autocapitalize="characters"></label><div class="small exp" id="bkMsg" style="margin-top:8px"></div><div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn del" id="bkDelGo" type="button">Delete everything</button></div>`)}
 else if(id==='bkDelGo'){if(($('#delTxt').value||'').trim()!=='DELETE'){bkSay('Type DELETE in capital letters to confirm.');return}
 e.target.disabled=true;e.target.textContent='Deleting…';
 try{const r=await sb.rpc('delete_my_account');if(r.error)throw r.error;
 try{await sb.auth.signOut()}catch(x){}
-try{localStorage.removeItem('payday1')}catch(x){}
+cacheClear();try{localStorage.removeItem('payday1')}catch(x){}
 location.replace('index.html?home')}catch(x){e.target.disabled=false;e.target.textContent='Delete everything';bkSay('Your account could not be deleted. Check your connection and try again. If it keeps failing, email us and we will delete it for you.')}}
-else if(id==='bkOut'){e.target.textContent='Signing out…';try{if(dirty)await flush();await sb.auth.signOut()}catch(x){}location.replace('auth.html')}
-else if(id==='bkUpd'){bkSay2(e.target,'Checking…');try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()))}if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(x){}location.replace(location.pathname+'?u='+Date.now())}
+else if(id==='bkOut'){if(dirty&&navigator.onLine)try{await flush()}catch(x){}
+if(dirty&&!e.target.dataset.sure){e.target.dataset.sure='1';e.target.textContent='Unsynced changes will be lost. Tap again to sign out';return}
+e.target.textContent='Signing out…';cacheClear();try{await sb.auth.signOut()}catch(x){}location.replace('auth.html')}
+else if(id==='bkUpd'){if(!navigator.onLine){bkSay2(e.target,'You are offline');return}bkSay2(e.target,'Checking…');try{if(navigator.serviceWorker){const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()))}if(window.caches){const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}}catch(x){}location.replace(location.pathname+'?u='+Date.now())}
 else if(id==='bkRestore')bkRestore(($('#bkText').value||'').trim())});
 $('#fileIn').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();
 r.onload=()=>{try{const o=JSON.parse(r.result);if(!o||!Array.isArray(o.e)||!Array.isArray(o.g))throw new Error('bad');S=norm(o);S.demo=false;save();notice='Backup imported.'}catch(x){notice='That file is not a Payday Planner backup.'}$('#dlg').close();render()};

@@ -47,7 +47,8 @@ Payday Planner is a free budgeting app that plans your money around your paychec
 You need a free account to use the app. Your plan is saved to your account, so it is the same on your phone and your computer.
 - Use **Export** in Settings to save a backup file, and **Import** to restore it.
 - **Sign out** and **Delete my account** are in Settings. Deleting removes your account and all your data.
-- The app needs an internet connection to load your plan.
+- The app works offline too. It keeps a copy of your plan on your device, and changes you make without a connection sync when you are back online. Signing out removes that copy.
+- **Change password** is in Settings under Account.
 
 ## Updating the app
 
@@ -68,6 +69,6 @@ To update: **Add file → Upload files**, drop in the changed files, then **Comm
 
 ## Coming next
 
-Shared plans for couples, offline use, background reminders, paid plans, and iPhone and Android app store versions.
+Shared plans for couples, background reminders, paid plans, and iPhone and Android app store versions.
 
 Payday Planner is a budgeting tool, not financial advice.

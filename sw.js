@@ -1,6 +1,6 @@
 // Network first, so a new version of the app shows up as soon as the device is online.
 // If the network is unavailable, the last copy saved on the device is used.
-const CACHE = 'payday-planner-v6';
+const CACHE = 'payday-planner-v7';
 const FILES = ['./', 'index.html', 'app.html', 'auth.html', 'privacy.html', 'terms.html', 'sb-config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'shot-dashboard.png', 'shot-calendar.png'];
 const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@';
 
@@ -31,6 +31,6 @@ self.addEventListener('fetch', e => {
         }
         return res;
       })
-      .catch(() => caches.match(r).then(m => m || (sameSite ? caches.match('index.html') : Response.error())))
+      .catch(() => caches.match(r, { ignoreSearch: true }).then(m => m || (sameSite ? caches.match('index.html') : Response.error())))
   );
 });
