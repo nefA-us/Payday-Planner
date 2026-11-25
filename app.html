@@ -224,13 +224,24 @@ if(r==='noauth'){location.replace('auth.html');return}
 if(r!==true){state='error';errMsg='Sign-in could not load. Check your connection, then reload this page.';paint('error');render()}}}
 // Payday Planner accounts (Supabase), website only
 let sb=null,planId=null,planAt=null,sbm=false,conflictRow=null,offline=false;
-const APPV='24 Nov 2026, build 10';
+const APPV='24 Nov 2026, build 11';
+// Plans: Free, Plus, Together. Access comes from a paid plan or from free access you grant. Checked here for convenience; the data itself always stays the person's own.
+let ACC={plan:'free',source:'free',expires_at:null,is_admin:false,unknown:true},ACCpreview=null;
+const RANK={free:0,plus:1,together:2},PNAME={free:'Free',plus:'Plus',together:'Together'};
+const FEAT={budgets:'plus',debt:'plus',receipts:'plus',export:'plus',offline:'plus'};
+const planOf=()=>ACCpreview&&ACC.is_admin?ACCpreview:ACC.is_admin?'together':ACC.plan;
+const can=f=>ACC.unknown||RANK[planOf()]>=RANK[FEAT[f]||'free'];
+async function loadAccess(){if(!sbm||!account)return;
+try{const r=await sb.rpc('my_access');if(r.error)throw r.error;ACC=Object.assign({},r.data,{unknown:false});try{localStorage.setItem('payday_access_'+account.email,JSON.stringify({a:r.data,at:Date.now()}))}catch(e){}}
+catch(e){try{const c=JSON.parse(localStorage.getItem('payday_access_'+account.email));if(c&&Date.now()-c.at<14*864e5)ACC=Object.assign({},c.a,{unknown:false});else ACC.unknown=true}catch(x){ACC.unknown=true}}
+if(!can('offline')){try{localStorage.removeItem(CK())}catch(e){}}
+if(state==='ready'&&!$('#dlg').open)render()}
 // Copy of the plan on this device, so the app opens and works without a connection. Cleared at sign-out.
 const CK=()=>'payday_cache_'+((account&&account.email)||'');
-function cacheWrite(){if(!sbm||!account||state!=='ready')return;try{localStorage.setItem(CK(),JSON.stringify({email:account.email,planId,planAt,dirty:!!(dirty||saving),data:S,at:Date.now()}))}catch(e){}}
+function cacheWrite(){if(!sbm||!account||state!=='ready'||!can('offline'))return;try{localStorage.setItem(CK(),JSON.stringify({email:account.email,planId,planAt,dirty:!!(dirty||saving),data:S,at:Date.now()}))}catch(e){}}
 function cacheRead(k){try{const o=JSON.parse(localStorage.getItem(k));return o&&o.data&&Array.isArray(o.data.e)?o:null}catch(e){return null}}
 function cacheKey(){try{return Object.keys(localStorage).find(k=>k.indexOf('payday_cache_')===0)||null}catch(e){return null}}
-function cacheClear(){try{Object.keys(localStorage).filter(k=>k.indexOf('payday_cache_')===0).forEach(k=>localStorage.removeItem(k))}catch(e){}}
+function cacheClear(){try{Object.keys(localStorage).filter(k=>k.indexOf('payday_cache_')===0||k.indexOf('payday_access_')===0).forEach(k=>localStorage.removeItem(k))}catch(e){}}
 // Crash reports: the error text, page, app version and browser type only. Never your entries. Can be turned off in Settings.
 let errN=0;const errSeen={};
 function reportErr(kind,msg,stack){try{if(localStorage.getItem('payday_noerr')==='1'||!sb||!sbm||errN>=5)return;const k=kind+'|'+msg;if(errSeen[k])return;errSeen[k]=1;errN++;
@@ -238,7 +249,7 @@ sb.from('error_reports').insert({kind:kind,message:String(msg||'').slice(0,500),
 window.addEventListener('error',e=>reportErr('error',e.message,e.error&&e.error.stack));
 window.addEventListener('unhandledrejection',e=>{const r=e.reason;reportErr('promise',(r&&r.message)||r,r&&r.stack)});
 async function reconnect(){if(!sbm||state!=='ready'||conflictRow)return;
-try{const row=await sbLoad();offline=false;
+try{const row=await sbLoad();offline=false;loadAccess();
 if(!row){if(dirty)flush();else paint('saved');return}
 if(row.updated_at===planAt){if(dirty)flush();else paint('saved')}
 else if(!dirty){planId=row.id;planAt=row.updated_at;S=norm(row.data);paint('saved');render()}
@@ -252,6 +263,11 @@ function sbRef(){return{set:async d=>{try{if(planId){const r=await sb.from('plan
 if(!r.data||!r.data.length){const cur=await sbLoad();if(cur&&cur.updated_at!==planAt){const x=new Error('conflict');x.code='conflict';x.row=cur;throw x}throw new Error('not saved')}
 planAt=r.data[0].updated_at}
 else{const r=await sb.from('plans').insert({data:d}).select('id,updated_at').single();if(r.error)throw r.error;planId=r.data.id;planAt=r.data.updated_at}}catch(e){if(e&&e.code==='conflict')throw e;throw sbErr()}}}}
+function plansDlg(note){const cur=planOf(),P=(window.PP_CONFIG&&PP_CONFIG.plans)||{},bill=!!(window.PP_CONFIG&&PP_CONFIG.billing);
+const tier=(k,items,extra)=>`<div class="card" style="margin:8px 0;${cur===k?'border-color:var(--inc)':''}"><b>${PNAME[k]}</b>${cur===k?' <span class="tag" style="color:var(--inc);border-color:var(--inc)">your plan</span>':''}${P[k]?` <span class="small">${esc(P[k])}</span>`:''}<ul class="wl" style="margin:6px 0">${items.map(i=>`<li>${i}</li>`).join('')}</ul>${extra||''}</div>`;
+const buy=k=>k===cur||RANK[cur]>RANK[k]?'':bill?`<div class="acts" style="justify-content:flex-start"><button class="btn" data-checkout="${k}" type="button">Choose ${PNAME[k]}</button></div>`:'<div class="small">Payments are coming soon. If you have an access code, enter it under Settings, Plan and access.</div>';
+dlg(`<h2>Plans</h2>${note?`<div class="small" style="margin-bottom:6px"><b>${esc(note)}</b></div>`:''}${tier('free',['Dashboard and Left over','Calendar and month ahead','Entries and repeating bills','Savings goals'])}${tier('plus',['Everything in Free','Debt payoff planning','Budgets and spending','Receipt scanning','Calendar reminder files','Use offline'],buy('plus'))}${tier('together',['Everything in Plus','Shared plan with a partner (coming soon)'],buy('together'))}<div class="acts"><button class="btn ghost" data-x type="button">Close</button></div>`)}
+async function startCheckout(plan){try{const r=await sb.functions.invoke('create-checkout',{body:{plan,returnUrl:location.origin+location.pathname}});if(r.error||!r.data||!r.data.url)throw r.error||new Error('no url');location.href=r.data.url}catch(e){toast('Checkout is not available right now. Please try again later.')}}
 function welcomeDlg(){dlg(`<h2>Welcome to Payday Planner</h2><div class="small">Plan each paycheck one week at a time. Three steps to get going:</div><ol class="wl"><li><b>Add your paychecks and bills</b> on the Entries tab.</li><li><b>Update your bank balance</b> in Settings, so the numbers start from your real money.</li><li><b>Check the Dashboard.</b> The Left over card shows what is safe to spend until your next payday.</li></ol><div class="small">We added a few sample entries so you can look around. Clear them when you are ready to use your own.</div><div class="acts"><button class="btn ghost" data-x type="button">Look around first</button><button class="btn" data-wclear type="button">Start with my own</button></div>`)}
 function conflictDlg(){dlg(`<h2>Changed on another device</h2><div class="small">This planner was saved from another phone or computer after you opened it. Nothing was overwritten. Choose which version to keep.</div><div class="acts"><button class="btn" data-cuse type="button">Use the newer version</button><button class="btn del" data-ckeep type="button">Keep what I have here</button></div><div class="small">The newer version replaces what you see now, including the change you just made. Keeping this one replaces the changes made on the other device.</div>`)}
 var RECOV=/type=recovery/.test(location.hash);if(RECOV)location.replace('auth.html'+location.hash);
@@ -272,6 +288,7 @@ else await firstRun()}
 catch(e){const c=cacheRead(CK());
 if(c){planId=c.planId;planAt=c.planAt;S=norm(c.data);state='ready';offline=true;dirty=!!c.dirty;paint('offline');render()}
 else{state='error';errMsg='Your account data could not be reached. Check your connection, then close and reopen the app.';render()}}
+loadAccess();
 return true}
 document.addEventListener('visibilitychange',async()=>{if(document.visibilityState!=='visible'||!sbm||state!=='ready'||dirty||saving)return;
 try{const row=await sbLoad();offline=false;if(row&&!dirty&&!saving&&!conflictRow){const d=norm(row.data);planAt=row.updated_at;if(JSON.stringify(d)!==JSON.stringify(S)){S=d;render()}cacheWrite()}}catch(e){}});
@@ -386,7 +403,9 @@ function render(){paint();$('#notes').innerHTML=notes();
 const g=(state!=='ready'||!S)?gate():null;
 if(g){$('#nav').innerHTML='';$('#view').innerHTML=g;return}
 $('#nav').innerHTML=TABS.map(t=>`<button class="${t===tab?'on':''}" data-t="${t}">${t}</button>`).join('');
-$('#view').innerHTML={Dashboard:dash,Calendar:cal,'Month ahead':plan,Budgets:budgets,Spending:spend,Entries:ents,Goals:goals}[tab]();checkNotify()}
+const LOCKS={Budgets:['budgets','Budgets','Set a monthly amount for groceries or anything else, log what you spend, and see what is left each week.'],Spending:['budgets','Spending by category','See where your money goes by category, using your calendar and the spending you log.']};
+const lk=LOCKS[tab];$('#view').innerHTML=lk&&!can(lk[0])?lockPanel(lk[1],lk[2]):{Dashboard:dash,Calendar:cal,'Month ahead':plan,Budgets:budgets,Spending:spend,Entries:ents,Goals:goals}[tab]();checkNotify()}
+function lockPanel(t,b){return `<div class="card"><h2>${esc(t)}</h2><div class="small">${esc(b)}</div><div class="small" style="margin:10px 0">This is part of the Plus plan. Your planner, calendar and goals stay free.</div><div class="acts"><button class="btn" data-plans type="button">See plans</button></div></div>`}
 // One line for an occurrence, with a Paid / Received toggle
 const orow=(x,dt=true)=>`<div class="row ${x.p?'paid':''}"><button class="lk" data-occ="${x.e.id}:${x.k}" type="button">${dt?sd(x.d)+' · ':''}${esc(x.e.n)}${x.e.r!=='o'?' ↻':''}${x.e.gl?' <span class="small">→ debt</span>':''}${!x.p&&x.d<today()&&x.d>=pd(S.set.asof)?'<span class="tag">overdue</span>':''}</button><span><b class="${x.e.t==='i'?'inc':'exp'}">${x.e.t==='i'?'+':'−'}${fmt(x.a)}</b> <button class="btn ghost sm" data-tog="${x.e.id}:${x.k}" type="button">${x.p?'Undo':x.e.t==='i'?'Received':'Paid'}</button></span></div>`;
 // Dashboard summary of debts: what is owed, this payday's extra payment, and the estimated debt-free date
@@ -612,8 +631,37 @@ dlg(`<h2>Settings</h2>
 <div class="acts"><button class="btn ghost" data-x type="button">Cancel</button><button class="btn" data-sset type="button">Save</button></div>
 <details class="sec"><summary>Reminders</summary>${notifZone()}</details>
 <details class="sec"><summary>Backup and data</summary><div class="small">Save a copy of your planner, or restore one. Importing a backup replaces what is in this planner.</div><div class="acts"><button class="btn ghost" data-export type="button">Export backup</button><button class="btn ghost" data-import type="button">Import backup</button></div><div class="acts"><button class="btn del" data-wipe type="button">Delete all my data</button></div></details>
-<details class="sec"><summary>Account</summary>${acct}</details>
+${sbm?planSec():''}<details class="sec"><summary>Account</summary>${acct}</details>
 <details class="sec"><summary>Help and about</summary><div class="acts"><a class="btn ghost" href="mailto:hello@mypayplanner.com?subject=Payday%20Planner%20feedback">Send feedback</a><a class="btn ghost" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a><a class="btn ghost" href="terms.html" target="_blank" rel="noopener">Terms of Service</a></div>${sbm?`<label class="chk"><input id="noerr" type="checkbox" ${noerr?'':'checked'}> Send error reports to help fix problems</label><div class="small">Reports contain the error message, the page, the app version and your browser type. They never contain your entries.</div>`:''}<div class="small">App version: ${APPV}</div><div class="acts"><button class="btn ghost" id="bkUpd" type="button">Check for update</button></div></details>`)}
+function planSec(){const p=planOf();let src;
+if(ACC.unknown)src='Plan details are not available right now.';
+else if(ACC.is_admin)src='Admin account: all features are on.'+(ACCpreview?' Previewing as '+PNAME[ACCpreview]+'.':'');
+else if(ACC.source==='paid')src='Paid plan'+(ACC.expires_at?', current period ends '+sdy(new Date(ACC.expires_at))+'.':'.');
+else if(ACC.source==='grant')src='Free access'+(ACC.expires_at?' until '+sdy(new Date(ACC.expires_at))+'.':' with no end date.');
+else src='Free plan.';
+return `<details class="sec"><summary>Plan and access</summary><div class="small">Your plan: <b>${PNAME[p]}</b>. ${esc(src)}</div><label>Have an access code?<input id="codeIn" autocomplete="off" autocapitalize="characters" placeholder="XXXXX-XXXXX"></label><div class="acts"><button class="btn ghost" id="codeGo" type="button">Redeem code</button><button class="btn ghost" data-plans type="button">See plans</button>${ACC.is_admin?'<button class="btn ghost" id="admOpen" type="button">Admin: manage access</button>':''}</div><div class="small exp" id="codeMsg" role="alert"></div></details>`}
+const msgTo=(id,m,ok)=>{const e=$('#'+id);if(e){e.textContent=m;e.className='small '+(ok?'inc':'exp')}};
+const untilTxt=x=>x?'until '+sdy(new Date(x)):'no end date';
+async function admDlg(){dlg(`<h2>Manage access</h2><div class="small">Give people free access without payment, by email or with a code. Only you can see this.</div>
+<details class="sec" open><summary>Give access by email</summary><label>Email<input id="gEm" type="email" autocomplete="off"></label><label>Plan<select id="gPl"><option value="plus">Plus</option><option value="together">Together</option></select></label><label>For how long<select id="gDays"><option value="">No end date</option><option value="30">30 days</option><option value="90">90 days</option><option value="365">1 year</option><option value="custom">Other number of days</option></select></label><input id="gCustom" type="number" min="1" placeholder="Number of days" hidden><label>Note (only you see it)<input id="gNote" autocomplete="off"></label><div class="acts"><button class="btn" id="gGo" type="button">Give access</button></div><div class="small" id="gMsg" role="alert"></div><div class="small"><b>Current grants</b></div><div id="gList" class="small">Loading…</div></details>
+<details class="sec"><summary>Access codes</summary><label>Plan<select id="cPl"><option value="plus">Plus</option><option value="together">Together</option></select></label><label>Access lasts (days after redeeming, empty = no end)<input id="cDays" type="number" min="1" placeholder="30"></label><label>Most people who can use it (empty = unlimited)<input id="cMax" type="number" min="1"></label><label>Code stops working on (optional)<input id="cExp" type="date"></label><label>Your own code (optional, otherwise one is made)<input id="cCode" autocomplete="off" autocapitalize="characters"></label><label>Note (only you see it)<input id="cNote" autocomplete="off"></label><div class="acts"><button class="btn" id="cGo" type="button">Create code</button></div><div class="small" id="cMsg" role="alert"></div><div class="small"><b>Your codes</b></div><div id="cList" class="small">Loading…</div></details>
+<details class="sec"><summary>Testing</summary><label class="chk"><input id="gPrev" type="checkbox" ${ACCpreview==='free'?'checked':''}> Preview the app as a Free user</label></details>
+<div class="acts"><button class="btn ghost" data-x type="button">Close</button></div>`);admRefresh()}
+async function admRefresh(){try{const g=await sb.rpc('admin_list_grants');if(g.error)throw g.error;const L=$('#gList');if(L)L.innerHTML=(g.data||[]).length?(g.data||[]).map(x=>{const dead=x.revoked_at||(x.expires_at&&new Date(x.expires_at)<new Date());return `<div class="row"><span>${esc(x.email)} · ${PNAME[x.plan]} · ${untilTxt(x.expires_at)}${x.note?' · '+esc(x.note):''}${x.revoked_at?' · revoked':dead?' · ended':''}</span>${dead?'':`<button class="btn ghost sm" data-grev="${x.id}" type="button">Revoke</button>`}</div>`}).join(''):'None yet.'}catch(e){const L=$('#gList');if(L)L.textContent='Could not load. Has the access SQL been run in Supabase?'}
+try{const c=await sb.rpc('admin_list_codes');if(c.error)throw c.error;const L=$('#cList');if(L)L.innerHTML=(c.data||[]).length?(c.data||[]).map(x=>`<div class="row"><span><b>${esc(x.code)}</b> · ${PNAME[x.plan]} · ${x.days?x.days+' days':'no end'} · used ${x.uses}${x.max_uses?' of '+x.max_uses:''}${x.expires_at?' · code ends '+sdy(new Date(x.expires_at)):''}${x.note?' · '+esc(x.note):''}${x.active?'':' · off'}</span><button class="btn ghost sm" data-cact="${esc(x.code)}:${x.active?0:1}" type="button">${x.active?'Turn off':'Turn on'}</button></div>`).join(''):'None yet.'}catch(e){const L=$('#cList');if(L)L.textContent='Could not load.'}}
+document.addEventListener('click',async e=>{const t=e.target,id=t.id;
+if(id==='codeGo'){const code=($('#codeIn').value||'').trim();if(!code)return msgTo('codeMsg','Type your code first.');
+if(!navigator.onLine)return msgTo('codeMsg','You need an internet connection to redeem a code.');
+t.disabled=true;try{const r=await sb.rpc('redeem_code',{p_code:code});if(r.error)throw r.error;if(!r.data||!r.data.ok)msgTo('codeMsg',(r.data&&r.data.error)||'That code did not work.');else{msgTo('codeMsg','Code accepted. You now have '+PNAME[r.data.plan]+(r.data.expires_at?' until '+sdy(new Date(r.data.expires_at)):'')+'.',1);$('#codeIn').value='';await loadAccess()}}catch(x){msgTo('codeMsg','The code could not be checked. Check your connection and try again.')}finally{t.disabled=false}}
+else if(id==='admOpen')admDlg();
+else if(id==='gGo'){const em=($('#gEm').value||'').trim(),dsel=$('#gDays').value,days=dsel==='custom'?+$('#gCustom').value:dsel?+dsel:null;
+if(!/^\S+@\S+\.\S+$/.test(em))return msgTo('gMsg','Enter a valid email address.');if(dsel==='custom'&&!(days>0))return msgTo('gMsg','Enter the number of days.');
+t.disabled=true;try{const r=await sb.rpc('admin_grant',{p_email:em,p_plan:$('#gPl').value,p_days:days,p_note:$('#gNote').value||null});if(r.error)throw r.error;msgTo('gMsg','Access given to '+em+'. They do not need to do anything. It applies the next time they open the app, even if they have not signed up yet.',1);$('#gEm').value='';$('#gNote').value='';admRefresh()}catch(x){msgTo('gMsg',(x&&x.message)||'Could not give access.')}finally{t.disabled=false}}
+else if(id==='cGo'){const n=v=>v===''?null:+v;t.disabled=true;try{const r=await sb.rpc('admin_create_code',{p_plan:$('#cPl').value,p_days:n($('#cDays').value),p_max_uses:n($('#cMax').value),p_expires_at:$('#cExp').value?$('#cExp').value+'T23:59:59':null,p_note:$('#cNote').value||null,p_code:$('#cCode').value||null});if(r.error)throw r.error;msgTo('cMsg','Code created: '+r.data.code,1);$('#cCode').value='';$('#cNote').value='';admRefresh()}catch(x){msgTo('cMsg',/duplicate/i.test((x&&x.message)||'')?'That code already exists.':(x&&x.message)||'Could not create the code.')}finally{t.disabled=false}}
+else if(t.dataset&&t.dataset.grev){t.disabled=true;try{const r=await sb.rpc('admin_revoke',{p_id:+t.dataset.grev});if(r.error)throw r.error}catch(x){}admRefresh()}
+else if(t.dataset&&t.dataset.cact){const[c,a]=t.dataset.cact.split(':');t.disabled=true;try{await sb.rpc('admin_set_code_active',{p_code:c,p_active:a==='1'})}catch(x){}admRefresh()}});
+document.addEventListener('change',e=>{if(e.target.id==='gDays')$('#gCustom').hidden=e.target.value!=='custom';
+if(e.target.id==='gPrev'){ACCpreview=e.target.checked?'free':null;render()}});
 // Change password: confirm the current one, then set a new one that meets the rules
 const PWR=[['At least 8 characters',p=>p.length>=8],['An uppercase letter (A to Z)',p=>/[A-Z]/.test(p)],['A lowercase letter (a to z)',p=>/[a-z]/.test(p)],['A number (0 to 9)',p=>/[0-9]/.test(p)],['A symbol, such as ! - _ @ # $ %',p=>/[^A-Za-z0-9]/.test(p)]];
 let pwTok='',pwCapId=null;
@@ -644,7 +692,7 @@ else{try{localStorage.removeItem('payday1')}catch(e){}S=blank()}
 $('#dlg').close();render()}
 const v=id=>$('#'+id).value;
 function after(){const d=$('#dlg');if(d.open&&dlgDay)dayDlg(dlgDay);render()}
-document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-cuse],[data-wclear],[data-ckeep],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
+document.addEventListener('click',e=>{const t=e.target,c=t.closest('[data-t],[data-m],[data-sm],[data-edit],[data-add],[data-x],[data-save],[data-del],[data-goal],[data-gsave],[data-gdel],[data-sset],[data-day],[data-dismiss],[data-keep],[data-clear],[data-occ],[data-tog],[data-skip],[data-unskip],[data-cuse],[data-wclear],[data-plans],[data-checkout],[data-ckeep],[data-osave],[data-bal],[data-bsave],[data-undo],[data-bud],[data-budsave],[data-buddel],[data-sp],[data-spsave],[data-spdel],[data-ocr],[data-cdate],[data-ack],[data-notif],[data-ics],[data-wipe],[data-export],[data-import],[data-new]');
 if(t.id==='stat'){if(conflictRow){conflictDlg();return}if(status==='offline'){reconnect();return}if(status==='error'){dirty=true;retried=false;flush()}return}
 if(t.id==='bSet'){if(state==='ready'&&S)setDlg();return}
 if(t.id==='bAcc'){const w=forecast(1)[0],sn=snap();S.g.forEach(g=>{const x=w.gd[g.id]||0;if(!x)return;if(g.k==='d'){g.o=r2(Math.max(0,+g.o-x));S.set.bal=r2(+S.set.bal-x)}else g.s=r2(+g.s+x)});S.acc[ymd(w.a)]=1;save();render();return toast('Plan accepted for this week',sn)}
@@ -667,6 +715,8 @@ if(en.r==='o'){S.e=S.e.filter(x=>x.id!=i);toast('Deleted '+en.n,sn)}
 else{const x=exOf(en,k);if(x.p)setPaid(en,k,false);const y=exOf(en,k);y.s=1;delete y.a;delete y.md;toast('Skipped '+en.n+' on '+sd(pd(k)),sn)}
 save();$('#dlg').close();render()}
 else if('wclear'in d){S.e=[];S.g=[];S.b=[];S.sp=[];S.acc={};S.set.bal=0;S.set.buf=0;S.demo=false;tab='Entries';save();$('#dlg').close();render()}
+else if('plans'in d)plansDlg()
+else if('checkout'in d)startCheckout(d.checkout)
 else if('cuse'in d){if(!conflictRow)return;S=norm(conflictRow.data);planAt=conflictRow.updated_at;conflictRow=null;dirty=false;$('#dlg').close();paint('saved');render();toast('Loaded the newer version')}
 else if('ckeep'in d){if(!conflictRow)return;planAt=conflictRow.updated_at;conflictRow=null;dirty=true;$('#dlg').close();flush()}
 else if('unskip'in d){const[i,k]=keyOf(d.unskip),en=S.e.find(x=>x.id==i);if(!en||!en.ex||!en.ex[k])return;const sn=snap();delete en.ex[k].s;tidy(en,k);save();render();toast('Restored '+en.n+' on '+sd(pd(k)),sn)}
@@ -676,7 +726,7 @@ else{const en=S.e.find(x=>x.id==id);if(!en)return;const fut=$('#fsc')&&v('fsc')=
 S.e.forEach(x=>{if(x.cat===undefined)delete x.cat;if(!x.gl)delete x.gl});save();$('#dlg').close();render()}
 else if('del'in d){if(!delArmed){delArmed=true;c.textContent='Tap again to delete';return}const en=S.e.find(x=>x.id==d.del),sn=snap();S.e=S.e.filter(x=>x.id!=d.del);save();$('#dlg').close();render();toast('Deleted '+(en?en.n:'entry'),sn)}
 else if('goal'in d)goalDlg(+d.goal)
-else if('gsave'in d){const k=v('gk'),id=+d.gsave;if(!v('gn').trim())return;let o;
+else if('gsave'in d){const k=v('gk'),id=+d.gsave;if(!v('gn').trim())return;const old=S.g.find(x=>x.id==id);if(k==='d'&&!can('debt')&&!(old&&old.k==='d')){plansDlg('Debt payoff planning is part of the Plus plan.');return}let o;
 if(k==='d'){if(!(+v('go')>0))return;o={n:v('gn').trim(),k:'d',o:+v('go'),i:+v('gi')||0,m:+v('gm')||0,t0:+v('g0')||+v('go'),d:v('gd'),p:+v('gp')}}
 else{if(!(+v('gt')>0))return;o={n:v('gn').trim(),k:'s',t:+v('gt'),s:+v('gs')||0,d:v('gd'),p:+v('gp')}}
 if(id){const i=S.g.findIndex(x=>x.id==id);if(i>=0)S.g[i]={id,...o}}else S.g.push({id:S.nid++,...o});save();$('#dlg').close();render()}
@@ -698,11 +748,11 @@ if(sid){const p=S.sp.find(x=>x.id==sid);if(!p)return;applySp(p,false);Object.ass
 else{const p={id:S.nid++,b:bid,a,d:dt,n:v('spn').trim()};S.sp.push(p);applySp(p,true)}
 save();$('#dlg').close();render();toast('Spent '+fmt(a)+(b?' on '+b.n:''),sn)}
 else if('spdel'in d){const sn=snap(),p=S.sp.find(x=>x.id==d.spdel);if(p){applySp(p,false);S.sp=S.sp.filter(x=>x.id!=p.id)}save();$('#dlg').close();render();toast('Spending deleted',sn)}
-else if('ocr'in d)readReceipt()
+else if('ocr'in d){if(!can('receipts')){plansDlg('Receipt scanning is part of the Plus plan.');return}readReceipt()}
 else if('cdate'in d){$('#gd').value=''}
 else if('ack'in d){S.set.ack=ymd(wkStart(today()));save();render()}
 else if('notif'in d){Notification.requestPermission().then(()=>{setDlg();checkNotify()})}
-else if('ics'in d)downloadIcs()
+else if('ics'in d){if(!can('export')){plansDlg('Calendar reminder files are part of the Plus plan.');return}downloadIcs()}
 else if('wipe'in d){if(!wipeArmed){wipeArmed=true;c.textContent='Click again to delete everything';return}doWipe()}
 else if('new'in d){S=blank();state='ready';readonly=false;save();render()}
 else if('export'in d)backupDlg('export')
